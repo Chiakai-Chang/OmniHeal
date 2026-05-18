@@ -145,6 +145,92 @@ python OmniHeal/src/probe.py <目標目錄>
 
 （Phase 1 以 surgical append 方式逐行加入，不重寫此標頭）
 
+### 步驟 7.5 `[D]`：產生 Task Queue（`progress/queue/`）
+
+建立 `progress/queue/` 目錄，根據 `progress/file_index.md` 的複雜度欄位產生 task 文件：
+
+**粒度規則：**
+- `high` 複雜度 → 一檔一 task（`type: file_scan`，`depth: deep`）
+- `medium`/`low` 複雜度 → 每 20 個一批（`type: batch_scan`，`depth: standard`）
+
+**命名規則：**`task_NNN_[簡短描述].md`（NNN 為三位數序號，從 001 開始）
+- high 檔案：`task_001_src_auth_login_py.md`（路徑轉底線）
+- 批次 task：`task_015_batch_016_035.md`（記錄批次範圍）
+- 最後一個：`task_999_phase15_summary.md`（固定）
+
+**task 文件格式（high 複雜度示例）：**
+```markdown
+---
+task_id: 001
+status: pending
+type: file_scan
+file: src/auth/login.py
+skill: [選定技能]
+depth: deep
+---
+
+## 前提脈絡
+治理規則：見 progress/constitution.md（前 30 行）；複雜度 high，deep 深度
+
+## 目標
+掃描 src/auth/login.py，輸出所有 confidence >= 80 的 findings
+
+## 完成條件
+- findings_index.md 已追加（有發現建 findings/ 詳細頁；無發現標 ✅ clean）
+- session_log.md 已追加摘要行
+- 本文件 status 改為 done
+```
+
+**task 文件格式（批次 task 示例）：**
+```markdown
+---
+task_id: 015
+status: pending
+type: batch_scan
+skill: [選定技能]
+depth: standard
+files:
+  - src/utils/format.py
+  - src/utils/helpers.py
+  - src/models/user.py
+  - ...(共 20 個)
+---
+
+## 前提脈絡
+治理規則：見 progress/constitution.md（前 30 行）；medium/low 複雜度，standard 深度
+
+## 目標
+依序掃描以上檔案，findings 記入 findings_index.md
+
+## 完成條件
+- 全部檔案已掃描（含跳過記錄）
+- session_log.md 已追加摘要行
+- 本文件 status 改為 done
+```
+
+**Phase 1.5 task（固定為最後一個）：**
+```markdown
+---
+task_id: 999
+status: pending
+type: summary
+---
+
+## 前提脈絡
+Phase 1 全部 task 已完成（此 task 在 queue 末尾）
+
+## 目標
+執行 Phase 1.5：整合發現，產出 progress/YYYY-MM-DD-skill/summary.md
+
+## 參考
+phases/phase1_scanner.md 的「Phase 1.5」章節
+
+## 完成條件
+- summary.md 已建立（含 Trust Declaration）
+- scan_plan.md 末尾追加 OMNIHEAL_SCAN_COMPLETE
+- 本文件 status 改為 done
+```
+
 ### 步驟 8 `[D]`：更新 `progress/scan_plan.md`，標記 Phase 0 完成
 
 更新 `progress/scan_plan.md`（若不存在則新建，使用 `OmniHeal/progress/scan_plan.md` 的格式）：
@@ -156,14 +242,12 @@ python OmniHeal/src/probe.py <目標目錄>
 - 開始時間：[YYYY-MM-DD HH:MM]
 - last_updated：[YYYY-MM-DD HH:MM]
 - 輸出目錄：progress/[YYYY-MM-DD-skill]/
+- queue 目錄：progress/queue/
 
 ## Phase 狀態
 - Phase 0（環境探測）：complete
-- Phase 1（全域掃描）：pending
+- Phase 1（全域掃描）：pending（queue 已就緒，共 [N] 個 task）
 - Phase 1.5（發現清理）：pending
-
-## next
-執行 Phase 1：閱讀 OmniHeal/phases/phase1_scanner.md，從批次 1 開始
 
 ## 追蹤欄位
 - last_finding_number：0
@@ -178,5 +262,6 @@ python OmniHeal/src/probe.py <目標目錄>
 - [ ] `progress/file_index.md` 存在且有資料列
 - [ ] `progress/constitution.md` 存在且已填寫治理規則（不是空白模板）
 - [ ] `progress/scan_plan.md` 的 Phase 0 狀態為 `complete`
+- [ ] `progress/queue/` 目錄存在且含 task_NNN_*.md 文件（至少 task_999_phase15_summary.md）
 - [ ] `progress/YYYY-MM-DD-<skill>/findings_index.md` 已建立（含表頭）
 - [ ] `progress/YYYY-MM-DD-<skill>/session_log.md` 已建立（含步驟 3 的紀錄）

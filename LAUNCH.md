@@ -66,20 +66,25 @@ OmniHeal 是放進目標專案裡的「AI 代理指令手冊 + 輔助工具箱�
 
 **嚴禁**：恢復時重新讀取所有 `findings/[filename].md` 詳細頁（context pollution，讓你沒有足夠 context 繼續掃描）。
 
-### 5-Question Reboot Test（恢復前自問）
+### 6-Question Reboot Test（恢復前自問）
 
-在按照 `next:` 指示繼續前，確認你能回答這 6 個問題：
-1. 我在掃描哪個目錄？（從 `scan_plan.md` 讀取）
+恢復掃描時，依序讀以下最小必要 context：
+1. `progress/scan_plan.md`（目標、Phase 狀態）
+2. `progress/queue/` 目錄清單（找第一個 pending task）
+3. `progress/YYYY-MM-DD-<skill>/findings_index.md` **最後 20 行**（確認最近狀態）
+
+然後確認你能回答這 6 個問題：
+1. 我在掃描哪個目錄？（`scan_plan.md` 的目標目錄）
 2. 現在跑到哪個 Phase？（`scan_plan.md` 的 Phase 狀態）
 3. 這次的任務目標是什麼？（`scan_plan.md` 的目標目錄與使用技能）
 4. 我已經發現了什麼？（`findings_index.md` 的最後 20 行）
-5. 我上次做到哪裡？（`session_log.md` 的最後 10 行）
-6. **Calibration Check**：截至目前最嚴重的那個發現的 file:line 和 severity 是什麼？
-   - 能清楚說出 → 繼續，保持原深度
-   - 記憶模糊 → 繼續，**但將下一批降級至 `fast` 深度**
-   - 完全想不起來（且 findings_index 顯示有發現）→ 停止，下次 session 用乾淨 context 重啟
+5. **下一個任務是什麼？**（`progress/queue/` 第一個 `status: pending` 的 task 文件）
+6. **Calibration Check**：截至目前最嚴重發現的 file:line 和 severity 是什麼？
+   - 能清楚說出 → 繼續，保持 task 文件指定深度
+   - 記憶模糊 → 繼續，但**將下個 task 降級至 `fast` 深度**
+   - 完全想不起來（且有發現記錄）→ 停止，下次 session 用乾淨 context 重啟
 
-若能回答全部 6 題，直接按 `next:` 繼續，**不需詢問使用者**。
+若能回答全部 6 題，直接執行第 5 題的 pending task，**不需詢問使用者**。
 
 ---
 
