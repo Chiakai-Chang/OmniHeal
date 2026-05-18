@@ -344,3 +344,89 @@ OmniHeal 增量掃描模式（Incremental Scan）下，僅分析 git diff 顯示
 | Git history context agent（分析歷史 PR 模式）| OmniHeal 的主要場景是夜間全量掃描，不侷限於 PR review |
 | Previous PR patterns agent | 同上 |
 | GitHub line link 格式（`file.py#L23`）| OmniHeal 輸出的是本地路徑，不是 GitHub URL |
+
+---
+
+## 2026-05-18 — affaan-m/everything-claude-code（ECC）
+
+**來源**：https://github.com/affaan-m/everything-claude-code  
+**研究目的**：評估黑客松冠軍作者的 AI Agent harness 系統，對 OmniHeal 自主執行迴圈設計、context 管理、與掃描品質控制的啟發
+
+### 核心發現
+
+ECC 是一套生產就緒的 Claude Code 插件，47 個代理、181 個 skills、60 個命令。核心洞見：
+
+**1. 自主迴圈的三大失敗模式（Autonomous Loop Anti-Patterns）：**
+> - 無限重試同一個失敗（沒有改變上下文）
+> - 跨迭代沒有 context bridge（每次重啟都從零開始）
+> - 用「負面指令」約束行為（比「分離任務」更差）
+
+**2. De-Sloppify 模式：**
+> 「兩個有焦點的 Agent 勝過一個受限的 Agent。」
+> 與其在分析 prompt 裡加「不要越界」，不如在分析完成後，**用另一個乾淨的 context** 做發現清理。
+
+**3. Analysis Depth Levels（分析深度等級）：**
+> 同一個技能，對不同複雜度的檔案用不同深度：fast / standard / deep / full
+> 這讓大型專案可以合理分配 LLM token
+
+**4. Context Budget（上下文預算追蹤）：**
+> 每次 Agent 迭代前，估計剩餘 context 空間。
+> 若 context 不足，**降級深度（deep → standard → fast）**，而非盲目繼續直到爆掉。
+
+**5. SHARED_TASK_NOTES 模式（ECC 稱為「跨迭代 context bridge」）：**
+> 每個迭代開始時讀、結束時寫一個共享筆記檔，橋接獨立 `claude -p` 呼叫間的進度。
+> → 這正是 OmniHeal 的 scan_plan.md 已在做的事，驗證了我們的設計正確。
+
+### 採用項目
+
+**1. 分析深度等級（Analysis Depth Levels）**  
+來源：ECC repo-scan skill 的 fast/standard/deep/full + Ralphinho 的 tier model  
+OmniHeal Phase 1 根據 `file_index.md` 的複雜度欄位，對每個檔案選擇掃描深度：
+
+| 深度 | 觸發條件 | Agent 行為 |
+|-----|---------|-----------|
+| `fast` | 複雜度 `low` 或剩餘 context < 30% | 只掃 scope.in 的前 3 條最高優先規則 |
+| `standard` | 複雜度 `medium`（預設） | 完整執行 skill 的所有分析標準 |
+| `deep` | 複雜度 `high` | 分段讀取（每段 4000 字元），對每段獨立套用 skill |
+
+Phase 0 的 `file_index.md` 已有複雜度欄位，直接作為深度決策依據，無需額外步驟。
+
+**2. Context Budget 檢查（Context Window 安全閘）**  
+來源：ECC context-budget skill 的 token 估算與降級邏輯  
+Phase 1 每處理完一個批次（20–30 個檔案），執行 context check：
+- **估算剩餘 context**：Agent 主觀評估「我還有多少 context 空間？」（不需要精確計算）
+- 若評估為 **> 50%**：繼續 `standard` 深度
+- 若評估為 **20–50%**：切換至 `fast` 深度，繼續掃描
+- 若評估為 **< 20%**：立即更新 `scan_plan.md`（記錄當前進度），結束本次 session。下次重啟時從此批次繼續（Session Recovery）
+- **嚴禁**：不評估就繼續直到 context 爆炸，導致最後幾個批次品質急劇下降
+
+**3. De-Sloppify 作為 Phase 1.5（發現清理階段）**  
+來源：ECC 的 De-Sloppify Pattern（「負面指令 < 分離任務」）  
+Phase 1 結束後，加入可選的 Phase 1.5（Findings Consolidation）：
+- **目的**：用乾淨的 context（不需重新讀原始檔案），只讀 `findings_index.md` 和 `findings/` 裡的條目，執行：
+  - 合併重複發現（同一問題被不同段落各報告一次）
+  - 刪除 confidence 邊界案例（75–79 的條目）
+  - 重新計算 session 統計（高嚴重度 N 個、中 N 個、已跳過 N 個）
+  - 產出 `progress/YYYY-MM-DD-<skill>/summary.md`（一頁 executive summary）
+- **對應 OmniHeal 原則**：Phase 1.5 是純 `[D]` + `[S]` 操作，不需要任何 `[I]` 互動
+
+**4. 迴圈終止信號（Completion Signal）**  
+來源：ECC continuous-claude 的 `--completion-signal` 機制  
+Phase 1 結束時（或 Phase 1.5 結束時），Agent 在 `scan_plan.md` 寫入明確的完成信號：
+```markdown
+## 完成信號
+OMNIHEAL_SCAN_COMPLETE | 2026-05-18 06:23 | 共 157 個檔案 | 高嚴重度發現 8 個
+```
+這讓使用者（或外部監控）能夠無歧義地判斷掃描是否完成（區別於「中途停止等待恢復」）。
+
+### 放棄項目
+
+| 項目 | 放棄原因 |
+|------|---------|
+| 完整 Loop 架構（sequential pipeline / continuous-PR / Ralphinho DAG）| 需要 `claude -p` CLI + 多程序，OmniHeal 必須在任何 Agent 執行，不依賴特定 CLI |
+| 多模型路由（Haiku → Sonnet → Opus 每步切換）| OmniHeal 領域無關且模型無關，不能假設特定模型的可用性 |
+| NanoClaw REPL | 需要 Node.js + 特定 ECC 安裝 |
+| Hook 基礎設施（PreToolUse / PostToolUse / SessionStart）| 同前，零安裝原則 |
+| MCP 設定 | 同前 |
+| 47 個專業代理 + 181 個 skill 的完整目錄 | OmniHeal 追求最小化，3 個核心 skill 足夠 |
+| ECC 的 12-layer Agent Stack 診斷框架 | 是除錯工具，不是掃描工具，不適用 |

@@ -1,5 +1,5 @@
 # OmniHeal — 設計文件 (Design Spec)
-> 版本：v1.5 | 日期：2026-05-18 | 更新：導入分批掃描、增量指紋、確定性優先、信心度門檻、編號發現（Understand-Anything + code-review plugin）
+> 版本：v1.6 | 日期：2026-05-18 | 更新：分析深度等級、Context Budget 安全閘、De-Sloppify Phase 1.5、迴圈終止信號（everything-claude-code）
 
 ---
 
@@ -82,6 +82,7 @@ OmniHeal/                        ← 整個工具箱的根目錄（git clone 進
 │   └── YYYY-MM-DD-<skill>/      ← 每次掃描的獨立子目錄（日期+技能命名）
 │       ├── findings_index.md    ← 每個分析過的檔案一行摘要（路徑+主要發現+嚴重程度）
 │       ├── session_log.md       ← 機器可解析的執行紀錄（ISO 時間+操作類型）
+│       ├── summary.md           ← Phase 1.5 產出：executive summary（統計+優先修復清單）
 │       └── findings/            ← 只有重大發現的檔案才建立
 │           └── [filename].md    ← 附 frontmatter 元資料的詳細發現頁
 │
@@ -153,12 +154,14 @@ Agent 執行步驟（標注 D/S/I 動詞型別）：
 
 **file_index.md 格式：**
 ```
-| 路徑 | 類型 | 大小 | 預估複雜度 |
-|------|------|------|----------|
-| src/auth.py | python | 4.2KB | high |
-| docs/api.md | markdown | 1.1KB | low |
+| 路徑 | 類型 | 大小 | 預估複雜度 | 掃描深度 |
+|------|------|------|----------|---------|
+| src/auth.py | python | 4.2KB | high | deep |
+| src/utils.py | python | 0.9KB | medium | standard |
+| docs/api.md | markdown | 1.1KB | low | fast |
 ```
-Phase 1 讀此索引決定掃描優先順序，high 複雜度優先。
+`掃描深度` 由 probe.py 根據複雜度自動填寫（high→deep / medium→standard / low→fast）。  
+Phase 1 讀此索引決定掃描優先順序與深度；high 優先，可在 context 不足時降級。
 
 ### Phase 1：夜間全域掃描
 **目標**：無人值守地掃描所有目標檔案，產出結構化報告。
@@ -167,16 +170,59 @@ Agent 執行步驟（標注 D/S/I 動詞型別）：
 1. `[D]` 執行 `python OmniHeal/src/probe.py [目標目錄] --list-files`，取得純文字檔清單
 2. `[D]` 讀取 `progress/file_index.md`，依預估複雜度排序（high 優先）
 3. `[D]` 將待掃描檔案依 **20–30 個一批** 分組，在 `scan_plan.md` 記錄批次進度（批次 N / 總批次）
-4. 對每批（20–30 個檔案）依序處理，每批結束後更新 `scan_plan.md`（已處理 N/Total）：
+4. 每處理完一個批次前，執行 **Context Budget 檢查**（每批約 20–30 個檔案）：
+   - Agent 主觀評估剩餘 context：
+     - **> 50%**：繼續 `standard` 或 `deep` 深度
+     - **20–50%**：全部降級至 `fast` 深度，繼續掃描
+     - **< 20%**：立即更新 `scan_plan.md`（記錄當前批次進度），停止本 session。下次重啟時 Session Recovery 自動從此繼續
+   - **嚴禁** context 不足時繼續高深度掃描（輸出品質急劇下降）
+
+5. 對每批（20–30 個檔案）依序處理，每批結束後更新 `scan_plan.md`（已處理 N/Total）：
+   - 對每個檔案，根據 `file_index.md` 的掃描深度欄位執行：
+     - `fast`（複雜度 low 或 context < 30%）：只套用 skill scope.in 的前 3 條最高優先規則
+     - `standard`（預設）：完整執行 skill 的所有分析標準
+     - `deep`（複雜度 high）：分段讀取（每段 4000 字元），每段獨立套用 skill，結果合併
    - 對每個檔案，執行以下流程（遵守 3-Strike Protocol）：
-     - `[D]` 讀取檔案內容（若超過 8000 字元則分段處理）
+     - `[D]` 讀取檔案內容（依深度決定分段或整體讀取）
      - `[D]` 讀取選定 skill 的 Prompt 模板（含 scope.in/scope.out 宣告）
      - `[D]` 讀取 `progress/constitution.md` 摘要（30 行以內）
      - `[S]` 依 skill 規定的分析標準逐條檢查（每條必須原子化，見 Atomic Finding 原則）
      - `[S]` 每個發現評估信心度（0–100）；**低於 80 的不輸出到 findings**
      - `[D]` 若有發現（confidence ≥ 80）：建立 `findings/[filename].md`（附 frontmatter）並更新 `findings_index.md`，每個發現賦予本次掃描全局遞增編號（#1、#2…）
      - `[D]` 追加一行到 `session_log.md`（跳過的檔案必須記錄具體原因，禁止靜默略過）
-5. `[D]` 在 `progress/scan_plan.md` 標記 Phase 1 為 `complete`，並寫入跳過檔案統計
+6. `[D]` 在 `progress/scan_plan.md` 標記 Phase 1 為 `complete`，並寫入跳過檔案統計
+
+### Phase 1.5：發現清理（可選，建議執行）
+**目標**：用乾淨的 context（不重新讀原始檔案）整合、清理 Phase 1 的原始發現，產出 executive summary。
+
+Agent 執行步驟：
+1. `[D]` 讀取 `findings_index.md`（全部條目，一行一條）
+2. `[D]` 讀取所有 `findings/[filename].md`（詳細頁）
+3. `[S]` 合併重複發現（同一問題被不同段落各報告一次）
+4. `[S]` 移除 confidence 在 75–79 之間的邊界案例（提升整體精確度）
+5. `[D]` 重新計算統計：高嚴重度 N 個、中 N 個、已跳過 N 個
+6. `[D]` 產出 `progress/YYYY-MM-DD-<skill>/summary.md`：
+   ```markdown
+   # 掃描摘要
+   > Skill: code_lint | 日期: 2026-05-18 | 總計: 157 個檔案
+   
+   ## 統計
+   - 🔴 高嚴重度：8 個（8 個檔案）
+   - 🟡 中嚴重度：23 個（15 個檔案）
+   - ✅ 無問題：110 個檔案
+   - ⏭️ 已跳過：19 個（原因分佈：編碼問題 12、超大檔案 7）
+   
+   ## 優先修復（高嚴重度摘要）
+   #1 src/auth/login.py:23 — SQL 注入風險（confidence:92）
+   #5 src/api/users.py:89 — 未處理的例外（confidence:87）
+   ...
+   ```
+7. `[D]` 在 `scan_plan.md` 寫入完成信號：
+   ```
+   OMNIHEAL_SCAN_COMPLETE | 2026-05-18 06:23 | 157 個檔案 | 高嚴重度 8 個
+   ```
+
+完成信號讓使用者和外部監控能夠無歧義判斷掃描是否完成（區別於「中途停止待恢復」）。
 
 #### 確定性優先原則（Deterministic First）
 > 能用規則做到的，不浪費 LLM token。
@@ -371,6 +417,10 @@ Agent 分析完一個檔案後，針對每個**原子化發現**輸出一條，�
 | 發現品質控制 | 信心度門檻 ≥ 80 才輸出 | 誤報優先設計，參考 code-review plugin |
 | 發現格式 | 編號（#N）+ file:line 精確位置 | 可追蹤、可引用，參考 code-review plugin |
 | 增量掃描 | 選用模式，依 git diff 篩選變動檔案 | 適合定期夜間掃描，參考 Understand-Anything |
+| 分析深度等級 | fast/standard/deep 依複雜度決定 | 避免在低價值檔案浪費 token，參考 ECC repo-scan |
+| Context Budget 安全閘 | 每批評估剩餘 context，不足時降級或停止 | 防止 context 爆炸導致末批品質劣化，參考 ECC |
+| Phase 1.5 清理 | 可選：乾淨 context 下整合發現、產 summary | De-Sloppify 模式，參考 ECC |
+| 完成信號 | 掃描完成後寫入 OMNIHEAL_SCAN_COMPLETE 標記 | 無歧義終止判斷，參考 ECC continuous-claude |
 
 ---
 
@@ -432,3 +482,5 @@ __pycache__/
 - 信心度門檻（80）是否需要讓使用者可配置（目前寫死在 skill 說明中）
 - 批次大小（20–30）是否依專案規模自動調整（目前固定）
 - 多代理並行（Milestone 4 後再考慮，參考 Understand-Anything 的 5 並發設計）
+- Phase 1.5 是否應該作為獨立 Phase 或整合進 Phase 1 結束步驟（目前為可選）
+- context 剩餘估算的具體門檻（50% / 20%）是否需要文件化為可調整參數
