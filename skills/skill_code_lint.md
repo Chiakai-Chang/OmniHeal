@@ -38,6 +38,7 @@
 `fast` 深度只執行前 3 條（優先順序由高到低排列）：
 
 ### 規則 1：硬編碼密碼或 API Key（優先順序：最高）
+- **適用語言**：所有語言
 - **標準**：非測試、非示例檔案中，字串賦值包含疑似密碼/金鑰的模式
   - `password = "xxx"` / `api_key = "sk-..."` / `secret = "..."` / `token = "..."` 等
 - **排除**：
@@ -47,6 +48,7 @@
 - **severity**：high | **confidence 閾值**：85
 
 ### 規則 2：SQL 字串拼接（注入風險）（優先順序：最高）
+- **適用語言**：所有語言
 - **標準**：SQL 查詢字串使用字串格式化或拼接（`%s %` format、f-string 插入、`+` 拼接）而非參數化查詢
 - **排除**：
   - 字串本身不包含任何變數（純靜態查詢字串）
@@ -54,6 +56,7 @@
 - **severity**：high | **confidence 閾值**：85
 
 ### 規則 3：未處理的異常（空 catch/except）（優先順序：高）
+- **適用語言**：所有語言
 - **標準**：`except:` 或 `catch` 區塊中只有 `pass`、`continue`，或完全空白
 - **排除**：
   - 有明確 `log()`/`logger.`/`raise`/`return` 的 catch 區塊
@@ -61,6 +64,7 @@
 - **severity**：high | **confidence 閾值**：80
 
 ### 規則 4：Python 函式命名不符 snake_case（優先順序：中）
+- **適用語言**：**僅 `.py` 檔案**（JavaScript/TypeScript/Go 等語言有各自的命名慣例，不適用本規則）
 - **標準**：Python 函式定義（`def`）使用 camelCase 或 PascalCase
   - `def doLogin(...)` / `def DoLogin(...)` → 不符合
 - **排除**：
@@ -70,6 +74,7 @@
 - **severity**：medium | **confidence 閾值**：80
 
 ### 規則 5：函式超過 50 行（優先順序：中）
+- **適用語言**：所有語言（`def` / `function` / `func` 關鍵字）
 - **標準**：從 `def`/`function`/`func` 到函式結尾的行數超過 50
 - **排除**：
   - 測試函式（`test_`、`spec_`、`it_` 開頭）
@@ -77,6 +82,7 @@
 - **severity**：medium | **confidence 閾值**：90（行數是確定性指標，信心度高）
 
 ### 規則 6：硬編碼的 IP 位址（優先順序：中）
+- **適用語言**：所有語言
 - **標準**：非設定檔、非測試檔中出現 IPv4 位址字串（如 `"192.168.1.1"`）
 - **排除**：
   - 本機位址（`127.0.0.1`、`0.0.0.0`、`localhost`）在開發設定中
@@ -84,6 +90,7 @@
 - **severity**：medium | **confidence 閾值**：80
 
 ### 規則 7：Python 2 print 語句（優先順序：低）
+- **適用語言**：**僅 `.py` 檔案**
 - **標準**：在 `.py` 檔案中出現 `print "..."` 形式（不帶括號的 Python 2 語法）
 - **排除**：
   - 位於字串中的 print 說明（如 docstring 中引用 Python 2 語法的說明文字）
