@@ -69,19 +69,43 @@
 
 若任何步驟完全沒有找到資料（例如純 shell 腳本專案，無任何 manifest），記錄「未偵測到」，繼續執行，不中斷。
 
-### 步驟 5 `[I]`：確認 + 補充兩個關鍵問題
+同時掃描步驟 1–3 已讀取的內容（README.md 開頭、package.json description、manifest 檔名路徑），找業務關鍵詞推斷領域：
 
-呈現偵測結果摘要，詢問使用者以下兩個問題（同時問，等一次回答）：
+| 關鍵詞（任一匹配即推斷） | 推斷領域 |
+|----------------------|---------|
+| `payment`, `billing`, `invoice`, `stripe`, `tax`, `finance`, `bank`, `trading`, `fintech` | 金融/支付 |
+| `patient`, `medical`, `health`, `doctor`, `clinical`, `hospital`, `pharma`, `hipaa` | 醫療健康 |
+| `cart`, `checkout`, `order`, `product`, `shop`, `ecommerce`, `catalog` | 電商 |
+| `tenant`, `saas`, `subscription`, `dashboard`, `enterprise`, `workspace`, `b2b` | 企業 SaaS |
+| 其他或無匹配 | 一般開發工具/其他 |
 
-**Q1（業務領域與合規）**：
+記錄推斷結果，例如：`偵測到業務關鍵詞：[stripe, billing]，推斷領域：金融/支付`。若無匹配，記錄「無業務關鍵詞，推斷：一般開發工具/其他」。
 
-「偵測到這是一個 [Framework] 專案，主要語言 [Language]。
+### 步驟 5 `[I]`：前置確認（整個流程唯一互動點）
 
-業務領域是什麼？（選項參考：金融交易 / 醫療健康 / 電商支付 / 企業 SaaS / 內容平台 / 開發工具 / 其他）
+> **⚠️ 這是整個掃描流程唯一需要使用者在場的互動步驟。回答後，Agent 自動執行 Phase 0 → Phase 1 → Phase 1.5，無需再值守。**
 
-有沒有特殊合規要求？（PCI-DSS / HIPAA / SOC 2 / GDPR / 無）」
+呈現偵測結果摘要，詢問以下兩個問題：
 
-**Q2（刻意使用的 Pattern）**：
+---
+
+**Q1（業務領域確認，必填）**：
+
+「Pre-flight 偵測完成。偵測到這是一個 [Framework] 專案，主要語言 [Language]。
+
+根據關鍵詞分析，推斷業務領域為：**[步驟 4 推斷結果]**
+
+請確認：
+- 若推斷正確 → 直接按 Enter 繼續
+- 若不對 → 輸入正確領域（金融交易 / 醫療健康 / 電商支付 / 企業 SaaS / 開發工具 / 其他）
+
+有特殊合規要求嗎？（PCI-DSS / HIPAA / SOC 2 / GDPR / 無，若無直接按 Enter）」
+
+等待使用者確認 Q1 後再繼續（Q1 必須等待，不設 timeout，因為此答案影響整個掃描的 severity 判斷）。
+
+---
+
+**Q2（刻意使用的 Pattern，選填）**：
 
 「有沒有看起來像問題、但其實是刻意設計的程式碼模式？
 
@@ -90,9 +114,11 @@
 - 特定命名風格 → 因為外部 API 或舊資料庫 schema 約束
 - 硬編碼 IP → 因為是本地開發測試用的固定位址
 
-這些在 findings 中會標注 `[by design]`，confidence 自動降為 60，不作為需修復的發現。」
+這些在 findings 中會標注 `[by design]`，confidence 自動降為 60，不作為需修復的發現。
 
-收到回答後繼續到步驟 6。若使用者跳過 Q2（沒有特殊 pattern），記錄「豁免清單：無」。
+**若 60 秒內無回應，自動設「無豁免 pattern」並繼續。若要整夜跑，回答 Q1 後直接離開即可。**」
+
+收到回答後，或 60 秒無回應後，記錄結果並繼續步驟 6。
 
 ### 步驟 6 `[D]`：建立 `progress/constitution_preflight.md`
 
