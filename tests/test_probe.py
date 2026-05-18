@@ -104,3 +104,56 @@ def test_list_files_excludes_files_larger_than_1mb():
         assert result.returncode == 0
         assert "small.txt" in result.stdout
         assert "huge.txt" not in result.stdout
+
+
+def _init_git_repo(tmpdir: str, email: str = "test@test.com", name: str = "Test") -> None:
+    import subprocess as sp
+    sp.run(["git", "init"], cwd=tmpdir, capture_output=True)
+    sp.run(["git", "config", "user.email", email], cwd=tmpdir, capture_output=True)
+    sp.run(["git", "config", "user.name", name], cwd=tmpdir, capture_output=True)
+
+
+def test_git_log_non_git_dir_prints_warning_to_stderr():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = run_probe(tmpdir, "--git-log")
+
+        assert result.returncode == 0
+        assert "Warning" in result.stderr
+
+
+def test_git_log_on_git_repo_outputs_commit_count_header():
+    import subprocess as sp
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        _init_git_repo(tmpdir)
+        Path(tmpdir, "file.txt").write_text("hello")
+        sp.run(["git", "add", "."], cwd=tmpdir, capture_output=True)
+        sp.run(["git", "commit", "-m", "Initial commit"], cwd=tmpdir, capture_output=True)
+
+        result = run_probe(tmpdir, "--git-log")
+
+        assert result.returncode == 0
+        assert "git_total_commits: 1" in result.stdout
+
+
+def test_git_log_commit_line_has_four_pipe_fields():
+    import subprocess as sp
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        _init_git_repo(tmpdir, email="dev@example.com", name="Dev")
+        Path(tmpdir, "a.py").write_text("x = 1")
+        sp.run(["git", "add", "."], cwd=tmpdir, capture_output=True)
+        sp.run(["git", "commit", "-m", "Add a.py"], cwd=tmpdir, capture_output=True)
+
+        result = run_probe(tmpdir, "--git-log")
+
+        commit_lines = [
+            ln for ln in result.stdout.strip().split("\n")
+            if ln and not ln.startswith("git_total") and not ln.startswith("  [body]")
+        ]
+        assert len(commit_lines) >= 1
+        fields = commit_lines[0].split(" | ")
+        assert len(fields) == 4, f"Expected 4 pipe fields, got: {commit_lines[0]!r}"
+        _hash, _date, _email, _subject = fields
+        assert len(_hash) == 8
+        assert _subject == "Add a.py"

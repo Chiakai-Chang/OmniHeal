@@ -5,15 +5,22 @@ probe.py — OmniHeal deterministic directory scanner
 Usage:
     python probe.py <target_dir>              # Summary stats to stdout
     python probe.py <target_dir> --list-files # One line per text file
+    python probe.py <target_dir> --git-log    # All git commits (full history)
 
 Output (--list-files): 5 pipe-separated fields per line:
     path | type | size | complexity | depth
+
+Output (--git-log): one record per commit
+    First line:  git_total_commits: N
+    Per commit:  hash8 | YYYY-MM-DD | author_email | subject
+    If body:     [body] first 300 chars (space-collapsed)
 
 Complexity thresholds:
     > 50KB  → high   → deep
     > 5KB   → medium → standard
     <= 5KB  → low    → fast
 """
+import subprocess
 import sys
 from pathlib import Path
 
@@ -112,9 +119,53 @@ def _summary(target: Path) -> None:
     print(f"總計：{text_count + binary_count + skip_count} 個")
 
 
+def _git_log(target: Path) -> None:
+    _FS = "OMNI_FS"   # field separator — safe on all platforms
+    _RS = "OMNI_RS"   # record separator
+    fmt = f"%H{_FS}%ae{_FS}%as{_FS}%s{_FS}%b{_FS}{_RS}"
+    try:
+        result = subprocess.run(
+            ["git", "log", "--all", f"--format={fmt}"],
+            capture_output=True,
+            text=True,
+            cwd=target,
+            timeout=120,
+        )
+    except FileNotFoundError:
+        print("Warning: git not found in PATH", file=sys.stderr)
+        return
+    except subprocess.TimeoutExpired:
+        print("Warning: git log timed out after 120s", file=sys.stderr)
+        return
+
+    if result.returncode != 0:
+        err = result.stderr.strip()[:200]
+        print(f"Warning: git error (not a git repo?): {err}", file=sys.stderr)
+        return
+
+    records = [r.strip() for r in result.stdout.split(_RS) if r.strip()]
+    print(f"git_total_commits: {len(records)}")
+
+    for block in records:
+        fields = block.split(_FS)
+        if len(fields) < 4:
+            continue
+        commit_hash = fields[0].strip()[:8]
+        author = fields[1].strip()
+        date = fields[2].strip()
+        subject = fields[3].strip()
+        body = fields[4].strip() if len(fields) > 4 else ""
+
+        print(f"{commit_hash} | {date} | {author} | {subject}")
+        if body:
+            body_preview = " ".join(body.split())[:300]
+            if body_preview:
+                print(f"  [body] {body_preview}")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
-        print("Usage: python probe.py <target_dir> [--list-files]", file=sys.stderr)
+        print("Usage: python probe.py <target_dir> [--list-files|--git-log]", file=sys.stderr)
         sys.exit(1)
     target = Path(sys.argv[1])
     if not target.exists():
@@ -125,6 +176,8 @@ def main() -> None:
         sys.exit(1)
     if "--list-files" in sys.argv:
         _list_files(target)
+    elif "--git-log" in sys.argv:
+        _git_log(target)
     else:
         _summary(target)
 

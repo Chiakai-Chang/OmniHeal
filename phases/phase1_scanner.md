@@ -44,6 +44,7 @@
 | `file_scan` | `file` 欄位的單一檔案 | 對該檔案執行步驟 2a–2e |
 | `batch_scan` | `files` 清單的每個檔案 | 依序對每個檔案執行步驟 2a–2e |
 | `followup` | `target_dir` 下所有指定副檔名（排除 `exclude`）| 讀取目錄清單，對每個未掃檔案執行步驟 2a–2e |
+| `git_log_scan` | git commit 歷史全量 | 見步驟 2h |
 | `summary` | — | 見「Phase 1.5」章節 |
 
 **每個 task 結束後（必做）：**
@@ -175,6 +176,20 @@ status: new
 
 **Pattern Alert 條件**（同時滿足才加）：severity:high + confidence >= 85 + 必須具體指出目錄或類型。
 
+**理念對齊違反標注**（constitution.md「專案自身原則」有對應原則時加）：
+
+若某 finding 違反 `progress/constitution.md` 的「專案自身原則」表格中任一條原則：
+1. finding 末尾加一行：
+   ```
+   ⚠️ 理念對齊違反：[來源檔案] 明確規定「[引用原文片段]」
+   ```
+2. severity 自動升一級（low → medium，medium → high，high 維持 high）
+3. findings_index.md 對應行的嚴重程度欄位更新為升級後的 severity
+
+**ADR 安全決策違反**：若違反的原則來自 ADR 且原則含有安全決策（ADR 明確說明「不使用 Y 因為安全問題 Z」），severity 直接設為 high，不再升級計算。
+
+**誤判保護**：constitution.md「專案自身原則」若為「未偵測到」，跳過此標注，不強制掛標。
+
 **無符合條件的發現：**
 ```
 | src/utils/format.py | ✅ clean | 無問題 | — |
@@ -233,6 +248,50 @@ task_001 在 src/auth/login.py:23 發現 SQL 注入（severity:high）；建議�
 - session_log.md 已追加摘要行
 - 本文件 status 改為 done
 ```
+
+#### 步驟 2h `[D/S]`：git_log_scan task 處理邏輯
+
+當 task type 為 `git_log_scan` 時：
+
+**[D]** 執行：
+```
+python OmniHeal/src/probe.py <目標目錄> --git-log
+```
+
+輸出第一行為 `git_total_commits: N`，其後每條 commit 格式：
+```
+hash8 | YYYY-MM-DD | author_email | subject
+  [body] body_preview（若有 body）
+```
+
+**[S]** 對全部輸出逐行掃描，偵測三類問題（case-insensitive）：
+
+| 類型 | 偵測 pattern | severity |
+|------|------------|---------|
+| 憑證洩漏 | `password=`、`secret=`、`token=`、`api_key`、`key=`、`passwd=`、`credential` | high |
+| 安全繞過備忘 | `bypass`、`skip.*auth`、`hardcode`、`disable.*valid`、`workaround.*security`、`no.*auth` | high |
+| 技術債定時炸彈 | `TODO.*fix.*later`、`remove.*before.*prod`、`\bhack\b`、`temp.*fix`、`fixme.*security` | medium |
+
+**[D]** 每個命中的 commit 輸出一條 finding：
+```
+#N git:a3f2d91 2025-11-03 — commit 備註含疑似 API Key（severity:high, confidence:90）[✓ VERIFIED]
+   commit：dev@company.com | "Update config with production settings"
+   問題：commit body 含 "api_key=sk-prod-xxxxx"
+   建議：立即 rotate 該 key；用 git filter-repo / BFG 清除 git history
+   ⚠️ 若為公開 repo：此資訊可能已被搜索引擎索引，即使清除 history 也需聯絡平台
+```
+
+**[D]** 完成後：
+- findings_index.md 追加（有發現）或 ✅ clean（無發現）
+- session_log.md 追加：`## [時間] git-log-scan | [N] commits | [M] findings`
+- task status 改為 done
+
+**git_log_scan 注意事項**：
+- Injection 黑名單（步驟 2b）同樣適用於 commit 內容
+- 若 git 不在 PATH 或非 git repo，probe.py 輸出 Warning 到 stderr，此 task 記錄「永久跳過：非 git repo 或 git 不可用」，繼續下一個 task
+- ci-covered 標注：若 constitution.md 記載 GitHub Advanced Security / secret scanning 等工具，findings 加 `[ci-covered]` 標注
+
+---
 
 ### 步驟 3 `[D]`：Queue 全部完成後標記
 
@@ -304,6 +363,30 @@ task_001 在 src/auth/login.py:23 發現 SQL 注入（severity:high）；建議�
 - constitution.md 安全邊界模組中的 findings
 - constitution_preflight.md domain severity 升級的 findings
 - severity:high + confidence >= 85 的 findings（無論是否在安全邊界）
+- `[理念對齊違反]` 標注的 findings（違反專案自身原則，說服力最高）
+- git_log_scan 的 high severity findings（憑證洩漏 / 安全繞過）
+
+**理念落差診斷**（新增，在 T 象限分析後執行）：
+
+對每個「理念對齊違反」的 finding 類型，計算：
+```
+落差率 = 該類型「理念對齊違反」findings 數 / 該類型全部 findings 數
+```
+
+| 落差率 | 行動 |
+|--------|------|
+| < 30% | 正常處理，每個 finding 個別升 severity |
+| ≥ 30% | 輸出「理念落差診斷」：建議修訂理念文件，不逐一升高 severity |
+
+**理念落差診斷格式**（加入 summary.md 的獨立區塊）：
+```
+## 📋 理念落差診斷
+
+[原則來源：CONTRIBUTING.md §3]「禁止裸 SQL」的落差率：47%（7/15 個 SQL findings 違反）
+→ 此原則在 src/legacy/ 目錄執行落差過大，建議：
+   1. 修訂 CONTRIBUTING.md：加入「src/legacy/ 歷史欠債例外」或設定修復期限
+   2. 或安排系統性整體修復（非逐一修復），預估工時 High
+```
 
 工時估算啟發式規則（給步驟 5.6 使用）：
 - 單行修復（換 API、改 env var）→ Low（< 1hr）
