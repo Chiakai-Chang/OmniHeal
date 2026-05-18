@@ -1,5 +1,5 @@
 # OmniHeal — 設計文件 (Design Spec)
-> 版本：v1.9 | 日期：2026-05-18 | 更新：Pattern Sweep 模式警示（冰山法則）、Conclusion Integrity Gate（YES.md）、3-Strike Level-2 方向自檢（pua + yes.md）
+> 版本：v1.10 | 日期：2026-05-18 | 更新：Phase 0 治理問題 MECE 設計原則（mece-ecs）
 
 ---
 
@@ -151,7 +151,11 @@ Agent 執行步驟（標注 D/S/I 動詞型別）：
 1. `[D]` 執行 `python OmniHeal/src/probe.py [目標目錄]`，取得目錄結構摘要
 2. `[D]` 產出 `progress/file_index.md`：每個目標檔案一行（路徑、副檔名、大小、預估類型）
 3. `[S]` 用讀檔工具隨機抽取 5 個文字檔，推斷專案性質與現有規範風格
-4. `[I]` 若 `progress/constitution.md` 不存在，詢問使用者確認 1-3 個治理底線問題
+4. `[S]` 若 `progress/constitution.md` 不存在，先對目標專案的問題空間做 **MECE 分解**，找出最重要的 1-3 個治理維度：
+   - 治理維度必須**互斥**（不重疊）：不可問兩個覆蓋同一面向的問題（例如「你用 snake_case？」和「命名慣例是什麼？」→ 同一維度）
+   - 治理維度必須**集體窮盡**（不遺漏）：合起來覆蓋目標專案最關鍵的治理面向（例如：命名慣例、錯誤處理、安全邊界——三個不重疊的維度）
+   - **MECE 自檢**：「這組問題有沒有維度重疊？」「是否有明顯更重要的治理維度被遺漏？」
+   `[I]` 確認 MECE 合規後，每個維度問**一個問題**，共 1-3 個問題
 5. `[D]` 根據 `templates/constitution_base.md` 模板，填寫並儲存 `progress/constitution.md`
 6. `[D]` 在 `progress/scan_plan.md` 標記 Phase 0 為 `complete`
 

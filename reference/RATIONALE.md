@@ -730,3 +730,56 @@ Phase 1.5 的 summary.md 在寫任何統計或根因結論前，必須先回答 
 | YES.md Bug Closure Protocol（Verify/Document/Learn 3 步）| OmniHeal 發現問題，不修復問題；修復是目標專案的責任 |
 | YES.md Blast Radius Check（改動前問 3 問題）| 同上，OmniHeal 不修改目標檔案 |
 | YES.md Memory Layer（跨 session 錯誤日誌）| OmniHeal 已有等效機制（cross-scan findings.md）|
+
+---
+
+## 2026-05-18 — Chiakai-Chang/mece-ecs
+
+**來源**：https://github.com/Chiakai-Chang/mece-ecs  
+**背景**：本專案作者自有 repo  
+**研究目的**：評估 MECE-ECS（互斥且集體窮盡的專家圓桌討論協議）對 OmniHeal Phase 0 治理設計與掃描品質的啟發
+
+### 核心發現
+
+MECE-ECS 是一套 AI 推理框架，讓 AI 透過 MECE（Mutually Exclusive, Collectively Exhaustive）原則動態召集多角色專家群（含 Devil's Advocate），進行多輪結構化辯論，直到達成 Convergence Gate（所有維度已分析、無新維度出現）。支援 L1/L2/L3 問題分級，問題越複雜輪數越多（黃金範例：12 輪、30+ 專家角色）。
+
+**MECE-ECS 與 OmniHeal 的定位差異：**
+
+| 面向 | MECE-ECS | OmniHeal |
+|------|---------|---------|
+| 設計場景 | 互動式決策討論（使用者在旁） | 無人值守夜間掃描 |
+| 執行模式 | 多輪反覆討論 + 專家辯論 | 單次線性掃描 → 報告 |
+| Token 消耗 | 高（每輪每個專家獨立推理） | 低（批次掃描，最小化 context） |
+
+**關鍵洞見：Phase 0 的治理問題設計缺乏 MECE 原則**
+
+目前 OmniHeal spec 的 Phase 0 步驟 4 只說「詢問使用者確認 1-3 個治理底線問題」，但沒有設計原則指導這些問題應該如何選擇。結果是：AI 可能問兩個覆蓋同一個維度的問題（例如「你用 snake_case 嗎？」和「你的命名慣例是什麼？」——同一維度，問了兩次），或者遺漏一個重要的治理維度。
+
+MECE-ECS 的核心原則直接解決這個問題：每個問題必須覆蓋**不同的治理維度（互斥）**，且這組問題必須**集體涵蓋最關鍵的治理面向（集體窮盡）**。
+
+### 採用項目
+
+**1. MECE 治理問題設計（Phase 0 第 4 步升級）**  
+來源：MECE-ECS 的 MECE Decomposition + Step 3 Convergence Criteria
+
+Phase 0 在詢問使用者治理問題前，先對目標目錄的問題空間做 MECE 分解：
+1. `[S]` 根據 probe.py 輸出與抽樣檔案，識別目標專案的**主要治理維度**（例如：命名慣例、錯誤處理、安全邊界、測試覆蓋率——每個維度互斥，合起來集體窮盡）
+2. 選出最重要的 1-3 個維度，每個維度問**一個問題**
+3. MECE 合規性自檢：「兩個問題有沒有問同一個維度？」「是否有明顯遺漏的關鍵維度？」
+
+**效果**：constitution.md 的治理規則確保覆蓋了目標專案最重要的、不重疊的治理面向。
+
+→ 修改 spec Section 6 Phase 0 第 4 步
+
+### 放棄項目
+
+| 項目 | 放棄原因 |
+|------|---------|
+| 多輪專家圓桌討論（runtime） | 每輪每個專家獨立推理 → 對 OmniHeal 的 100+ 個檔案掃描而言 token 成本過高；且需要互動式使用者在旁 |
+| Devil's Advocate 角色（runtime） | 已由既有 Claim Verification（✓ VERIFIED）+ 信心度門檻（≥80）+ Conclusion Integrity Gate（Phase 1.5 第 0 步）覆蓋 |
+| Convergence Gate（Phase 1.5）| Phase 1.5 的步驟清單已有明確終止條件；顯式 Convergence Gate 過度工程 |
+| Physical Fingerprint（行數/hash 記錄）| OmniHeal 用 findings frontmatter 做稽核軌跡，不需要 round 文件的哈希 |
+| wiki/rounds/ 文件結構 | OmniHeal 已有等效的 progress/YYYY-MM-DD-skill/ 結構 |
+| L1/L2/L3 問題分級 | OmniHeal 已有等效的 fast/standard/deep 深度等級 |
+| ADR Lifecycle / Assetization | OmniHeal 的 progress/ + cross-scan findings.md 已有等效的稽核軌跡機制 |
+| Adversarial Pivot（推理邏輯切換）| 設計為多輪討論間的模式切換；OmniHeal 是批次線性掃描，無適用場景 |
