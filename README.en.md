@@ -94,6 +94,31 @@ Skipped: 3 (2 encoding issues, 1 oversized binary)
 
 ---
 
+## Use Cases
+
+| User | Scenario | Key Benefit |
+|------|---------|------------|
+| **Technical consultant / architect** | Inheriting a legacy codebase, mapping tech debt | Overnight scan → action_plan.md prioritizes what to fix first, no guesswork |
+| **Government / enterprise procurement officer** | Vendor system acceptance code review | No programming knowledge needed: clone → Agent scans → severity-graded report to send back to vendor |
+| **AI / ML engineer** | Local LLM training script tech debt | Hardcoded paths, magic numbers, no seed, no OOM handling — all caught in one pass |
+| **Outsourcing client** | Vendor deliverable acceptance negotiation | findings list becomes a contract appendix — vendor fixes before final payment |
+| **Open source maintainer** | Quality gate before merging external PRs | Auto-aligns with project's own principles (CONTRIBUTING.md / ADR); violations auto-upgrade severity |
+| **Security / compliance team** | Low-cost self-audit before formal assessment | Find obvious issues before paying expensive auditors to catch them |
+
+### Skill × Scenario
+
+| Skill | Best for |
+|-------|---------|
+| `skill_code_lint` | Code quality, naming, security vulnerabilities, tech debt |
+| `skill_log_parse` | System log anomaly detection, format inconsistencies, high-frequency error clustering |
+| `skill_text_align` | AI transcription quality review, homophone errors in meeting notes, regulatory document proofreading |
+
+### Honest Limitations
+
+Not suitable for: **Runtime bug tracing** (static analysis only — doesn't execute code), **real-time CI/CD gates** (designed for deep one-shot health checks), **SQL DDL schema review** (not yet covered by available skills).
+
+---
+
 ## How It Works
 
 | Phase | What it does |
