@@ -5,7 +5,23 @@
 將 OmniHeal git clone 進任何專案，然後告訴任何 AI coding agent：
 > "請閱讀 @OmniHeal 開始進行"
 
-Agent 讀取 `LAUNCH.md` 後，自動在夜間完成整個專案的掃描。
+Agent 讀取 `LAUNCH.md` 後，自動完成整個專案的掃描與改善建議。
+
+---
+
+## 為什麼需要 OmniHeal？
+
+現有的 linting / 靜態分析工具存在三個根本問題：
+
+| 問題 | 現有工具 | OmniHeal |
+|------|---------|---------|
+| **安裝依賴** | 需要 `npm install`、`pip install`、設定 CI | `git clone` 即用，零依賴 |
+| **掃描中斷** | 中斷後重頭來，或不支援恢復 | Task Queue 架構，中斷後從第一個未完成任務繼續 |
+| **只找問題** | 輸出 47 個 findings，開發者不知道修哪個 | SWOT+TOWS 分析，輸出「今日修復 / 本週 PR / 下季規劃」行動路線圖 |
+
+**最關鍵的差異：** OmniHeal 不只告訴你「有什麼問題」，而是告訴你「這週花 2 個人日，應該修哪 3 件事，不修會怎樣」。
+
+---
 
 ## 使用方式
 
@@ -22,13 +38,45 @@ git clone <omniheal-repo-url> OmniHeal/
 
 Agent 從這裡接手一切。
 
+---
+
+## 你會得到什麼？
+
+掃描完成後，OmniHeal 產出兩份文件：
+
+### `summary.md`（審計快照）
+```
+掃描時間：2026-05-18 | 共 157 個檔案 | 高風險發現 8 個
+跳過統計：3 個（編碼問題 2、超大二進位 1）
+⚠️ AI 限制聲明：本報告基於靜態分析，不保證窮盡所有問題
+```
+
+### `action_plan.md`（行動路線圖）
+```
+⚡ 今日修復（高威脅 × 低工時）
+- [ ] config.py:12 — 硬編碼 API Key（~30 分鐘）
+  不修後果：憑證洩漏即可存取第三方服務
+
+📅 本週 PR（弱點聚類 × 機會）
+- [ ] src/db/ SQL 注入系統性修復（解決 #1, #4, #7，同一根因）
+  參考範本：src/auth/ 已正確實作
+
+💪 強項維持
+- src/auth/：zero high findings → 作為其他模組的修復範本
+```
+
+---
+
 ## 運作流程
 
 | 階段 | 做什麼 |
 |------|--------|
-| Phase 0 | 掃描目錄結構，詢問 1–3 個治理問題，建立 `progress/constitution.md` |
-| Phase 1 | 每批 20–30 個檔案逐一掃描，結果寫入 `progress/YYYY-MM-DD-<skill>/` |
-| Phase 1.5 | 整合發現，產出 `progress/YYYY-MM-DD-<skill>/summary.md` |
+| Pre-flight | 偵測 framework 慣例、CI toolchain、業務領域風險等級 |
+| Phase 0 | 掃描目錄、MECE 治理問題（1–3 個）、產生 Task Queue |
+| Phase 1 | 消耗 queue，逐一掃描，3-Strike Protocol 確保不中斷 |
+| Phase 1.5 | SWOT 分析 → 產出 summary.md + action_plan.md |
+
+---
 
 ## 可用技能
 
@@ -38,9 +86,34 @@ Agent 從這裡接手一切。
 | `skill_log_parse` | 日誌：格式不一致、高頻錯誤、異常 |
 | `skill_text_align` | 文字稿：AI 轉錄錯誤、同音字替換 |
 
+---
+
+## 設計基礎：14 個 repo 的蒸餾
+
+OmniHeal 的每一個設計決策都有來源。以下是關鍵採用點：
+
+| 來源 | 採用設計 | 解決的問題 |
+|------|---------|----------|
+| [Manus AI / planning-with-files](https://github.com/OthmanAdi/planning-with-files) | 3-file 進度結構、3-Strike Protocol、Reboot Test | Agent 重啟後無縫恢復 |
+| [Anthropic / claude-plugins-official](https://github.com/anthropics/claude-plugins-official) | 信心度門檻（≥80）、誤報優先設計 | 避免「報了 47 個問題有 30 個是假陽性」 |
+| [ECC（黑客松冠軍）](https://github.com/affaan-m/everything-claude-code) | 分析深度等級（fast/standard/deep）、Context Budget 安全閘、Phase 1.5 De-Sloppify | 大型專案全程掃描品質一致 |
+| [Continuous-Claude-v3](https://github.com/parcadei/Continuous-Claude-v3) | Claim Verification（✓ VERIFIED / ? INFERRED）| 研究發現 80% 的 AI 程式碼聲明未讀原始碼即輸出 |
+| [PageIndex + llm-wiki-plugin](https://github.com/VectifyAI/PageIndex) | 先建索引再深潛、findings 雙層結構、surgical append | 大型專案不盲目逐行掃描 |
+| [Understand-Anything](https://github.com/Lum1104/Understand-Anything) | 確定性優先（probe.py 做結構提取，LLM 做語義判斷）| 不浪費 LLM token 在可用規則計算的事 |
+| [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) | Task Queue 恢復點設計、last_updated 時間戳 | 夜間無人值守長程掃描穩健性 |
+| [PUA + YES.md](https://github.com/tanweai/pua) | Pattern Alert（冰山法則）、Level-2 方向自檢 | 發現一個問題時主動檢查同類型檔案 |
+| [AIBDD](https://github.com/Waterball-Software-Academy/aixbdd) | D/S/I 動詞模型、Atomic Finding 原則 | 每條發現一個問題、一個位置、一個建議 |
+| [MECE-ECS](https://github.com/Chiakai-Chang/mece-ecs) | MECE 治理問題設計 | Phase 0 治理問題不重疊、不遺漏 |
+| [Andrej Karpathy Principles](https://github.com/multica-ai/andrej-karpathy-skills) | Think Before Coding / Simplicity First / Surgical Changes | 外部驗證 OmniHeal 設計哲學 |
+
+> 完整研究決策紀錄：[`reference/RATIONALE.md`](reference/RATIONALE.md)（14 repos，每個都有採用項目與放棄原因）
+
+---
+
 ## 核心設計原則
 
 - **零安裝**：唯一依賴是 Python 3（僅標準函式庫）
-- **永不中斷**：3-Strike Protocol 確保單一檔案失敗不會停止整個掃描
-- **誤報優先**：只輸出 `✓ VERIFIED`（已讀原始碼）且信心度 ≥ 80 的發現
-- **可中斷恢復**：中斷的掃描從 `progress/scan_plan.md` 的 `next:` 欄位自動恢復
+- **永不中斷**：3-Strike Protocol 確保單一檔案失敗不停止整個掃描
+- **高精度優先**：只輸出 `✓ VERIFIED`（已讀原始碼）且信心度 ≥ 80 的發現
+- **可中斷恢復**：Task Queue 架構，恢復點 = queue 第一個未完成任務，不依賴 Agent 記憶力
+- **Consulting 而非 Audit**：SWOT+TOWS 分析讓輸出從「47 個問題清單」升級為「這週修哪 3 個」
