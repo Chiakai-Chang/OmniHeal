@@ -10,6 +10,22 @@
 
 ## 執行步驟
 
+### 步驟 0 `[D]`：讀取 Pre-flight Context（若存在）
+
+若 `progress/constitution_preflight.md` 存在，讀取全文，將以下資訊納入後續步驟的判斷前提：
+- Framework 慣例排除清單（步驟 3 抽樣推斷時，不把 framework 慣例誤判為問題）
+- 業務領域與合規要求（步驟 4 MECE 分解時，領域決定哪些維度更重要）
+- 豁免 Pattern 清單（步驟 6 建立 constitution.md 時直接複製進來）
+
+**若 `progress/constitution_preflight.md` 不存在**：跳過步驟 0，直接從步驟 1 開始。Phase 0 的 MECE 問題照常問，constitution 不會有 Pre-flight 欄位（可接受，只是 findings 品質可能較低）。
+
+**步驟 4 MECE 問題的調整**：若已有 preflight context，下列維度可跳過（preflight 已回答）：
+- framework 慣例問題 → preflight 步驟 1 已偵測
+- 業務領域問題 → preflight 步驟 5 Q1 已問
+- 豁免 pattern 問題 → preflight 步驟 5 Q2 已問
+
+Phase 0 的 MECE 問題只需補充 preflight **未涵蓋**的維度（通常剩下：命名慣例細節、錯誤處理策略、安全邊界的具體模組）。
+
 ### 步驟 1 `[D]`：掃描目標目錄，取得檔案清單
 
 執行：

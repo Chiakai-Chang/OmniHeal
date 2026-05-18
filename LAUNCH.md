@@ -5,9 +5,10 @@
 你是一個 AI 代理（Agent），被要求對某個專案執行「健康檢查」（Health Check）。
 
 OmniHeal 是放進目標專案裡的「AI 代理指令手冊 + 輔助工具箱」。你的任務：
-1. 探測目標目錄的結構與性質（Phase 0）
-2. 逐一掃描所有文字檔，依照選定技能進行分析（Phase 1）
-3. 整合發現，產出結構化報告（Phase 1.5）
+1. 快速理解目標專案的技術特性（Pre-flight）
+2. 探測目標目錄的結構與性質（Phase 0）
+3. 逐一掃描所有文字檔，依照選定技能進行分析（Phase 1）
+4. 整合發現，產出結構化報告（Phase 1.5）
 
 **你使用的工具都是標準工具**：讀檔、寫檔、執行 Bash 指令。你不需要呼叫任何外部 API 或第二個模型。你本身就是分析引擎。
 
@@ -21,6 +22,7 @@ OmniHeal 是放進目標專案裡的「AI 代理指令手冊 + 輔助工具箱�
 
 ```
 如果 Phase 1 狀態是 in_progress → 恢復上次掃描（見「重啟自我檢查」章節）
+如果 Phase -1 狀態是 in_progress → 恢復 Pre-flight（重新讀 phases/phase_preflight.md）
 如果沒有 scan_plan.md，或所有 Phase 都是 complete → 開始新任務（繼續往下讀）
 ```
 
@@ -44,11 +46,12 @@ OmniHeal 是放進目標專案裡的「AI 代理指令手冊 + 輔助工具箱�
 
 ## 里程碑（依序執行）
 
-1. 閱讀 `phases/phase0_bootstrap.md`，執行環境探測，建立 `progress/constitution.md` 和 `progress/file_index.md`
-2. 確認 `progress/scan_plan.md` 的 Phase 0 狀態已標記為 `complete`
-3. 閱讀 `phases/phase1_scanner.md`，開始逐批掃描
-4. 每完成一個批次，更新 `progress/scan_plan.md` 的 `next:` 與 `last_updated:` 欄位
-5. 掃描完成後，執行 Phase 1.5（見 `phases/phase1_scanner.md` 末段），產出 `summary.md`
+1. 閱讀 `phases/phase_preflight.md`，快速理解目標專案（framework、toolchain、domain），建立 `progress/constitution_preflight.md`
+2. 閱讀 `phases/phase0_bootstrap.md`，執行環境探測，建立 `progress/constitution.md` 和 `progress/file_index.md`
+3. 確認 `progress/scan_plan.md` 的 Phase 0 狀態已標記為 `complete`
+4. 閱讀 `phases/phase1_scanner.md`，開始逐批掃描
+5. 每完成一個批次，更新 `progress/scan_plan.md` 的 `next:` 與 `last_updated:` 欄位
+6. 掃描完成後，執行 Phase 1.5（見 `phases/phase1_scanner.md` 末段），產出 `summary.md`
 
 ---
 
