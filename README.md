@@ -25,15 +25,26 @@ Agent 讀取 `LAUNCH.md` 後，自動完成整個專案的掃描與改善建議�
 
 ## 使用方式
 
-```bash
-# 步驟 1：將 OmniHeal clone 進目標專案
-cd your-project/
-git clone https://github.com/Chiakai-Chang/OmniHeal.git
+**步驟 1：將 OmniHeal clone 進目標專案**
 
-# 步驟 2：告訴任何 AI Agent（Claude、Copilot 等）
-"請閱讀 @OmniHeal/ 開始進行"
-# 或更具體地：
-"請閱讀 @OmniHeal/，對 ./src 目錄執行程式碼健檢，使用 code_lint 技能"
+```bash
+cd your-project/
+```
+
+```bash
+git clone https://github.com/Chiakai-Chang/OmniHeal.git
+```
+
+**步驟 2：告訴任何 AI Agent（Claude、Copilot 等）**
+
+```
+請閱讀 @OmniHeal/ 開始進行
+```
+
+或更具體地：
+
+```
+請閱讀 @OmniHeal/，對 ./src 目錄執行程式碼健檢，使用 code_lint 技能
 ```
 
 Agent 從這裡接手一切。
