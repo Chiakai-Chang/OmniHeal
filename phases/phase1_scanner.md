@@ -279,6 +279,105 @@ task_001 在 src/auth/login.py:23 發現 SQL 注入（severity:high）；建議�
 4. `[S]` 移除 confidence 在 75–79 之間的邊界案例（提升整體精確度）
 5. `[D]` 重新計算統計：高嚴重度 N 個、中嚴重度 N 個、跳過 N 個
 
+### 步驟 5.5 `[S]`：SWOT 分析
+
+基於清理後的 findings 資料和 `progress/constitution.md` 安全邊界資訊，構建四個象限：
+
+**S（Strengths — 強項）**
+- 計算每個目錄的 clean density：`clean_files / total_files`
+- 安全強項：constitution.md 標注的安全邊界模組 + clean density > 90%
+- 品質參考：clean density > 95% 的目錄 → 推薦為修復範本
+
+**W（Weaknesses — 弱點聚類）**
+- 將 findings 按「目錄 + finding 類型」分組
+- 標記聚類類型：
+  - **系統性**：同一目錄 ≥3 個相同類型 findings（一個根因，多個症狀）
+  - **習慣性**：相同 finding 類型散布各目錄（團隊 pattern 問題）
+  - **局部性**：單一檔案獨有（個人疏漏）
+
+**O（Opportunities — 機會）**
+- 系統性 Weakness（≥3 同類型 findings 同一目錄）→ 一個 PR 可全解決
+- 弱點目錄有對應 Strengths 目錄可作範本 → 低成本修復路徑
+- 共用函式有 bug → 修一處所有呼叫者受益（高槓桿）
+
+**T（Threats — 威脅）**
+- constitution.md 安全邊界模組中的 findings
+- constitution_preflight.md domain severity 升級的 findings
+- severity:high + confidence >= 85 的 findings（無論是否在安全邊界）
+
+工時估算啟發式規則（給步驟 5.6 使用）：
+- 單行修復（換 API、改 env var）→ Low（< 1hr）
+- 同目錄多個相同類型修復（一 PR 解決）→ Medium（< 1day）
+- 跨模組重構 / 架構調整 → High（> 1day）
+- 帶 `[by design]` 的 finding → 不列入 action_plan
+
+### 步驟 5.6 `[D/S]`：產出 `action_plan.md`
+
+儲存到 `progress/YYYY-MM-DD-<skill>/action_plan.md`。
+
+**TOWS → 時間表映射：**
+| TOWS 格子 | 時間表區塊 |
+|---------|----------|
+| WT（高 Threat × Low Effort）| ⚡ 今日修復 |
+| WO（弱點聚類 × Opportunity）| 📅 本週 PR |
+| ST（Strength + Threat）| ⚠️ 高風險未修警告（若暫不修）|
+| SO（Strength + Opportunity）| 💪 強項維持（範本推薦）|
+| WT（高 Threat × High Effort）| ⚠️ 高風險未修警告 |
+| SO/WO（Low Threat × High Effort）| 🗓️ 下季規劃 |
+
+**掃描未完成時（N < M）**：
+- 只輸出「⚡ 今日修復」和「⚠️ 高風險未修警告」（已確認的緊急問題）
+- 其餘區塊加 `* 待完整掃描後產出` 標注
+
+**action_plan.md 格式：**
+
+```markdown
+# 健檢改善路線圖
+> 基於 [date] 掃描 | Skill: [skill] | [M] 個檔案 | [N] 個 findings
+
+⚠️ 基於部分資料（[N]/[M] 個檔案）— 標 * 的區塊待完整掃描後產出
+（僅局部掃描時顯示上方這行）
+
+---
+
+## ⚡ 今日修復（高威脅 × 低工時）
+預估工時：Low（< 1 小時）
+
+- [ ] #[N] `[file:line]` — [問題描述]（Low，~[X] 分鐘）
+  - 不修後果：[具體風險描述]
+
+## 📅 本週 PR（弱點聚類 × 機會）*
+預估工時：Medium（< 1 天）｜一個 PR 解決多個 findings
+
+- [ ] `[目錄]/` [類型]系統性修復（解決 #[N], #[N], #[N]，同一根因）
+  - 建議：[修復策略]
+  - 參考範本：`[強項模組路徑]` 已正確實作
+
+## 🗓️ 下季規劃（架構決策 / 低風險技術債）*
+
+- [ ] `[目錄]/` [問題描述]（[N] 個 medium findings）
+  - 工時：High（> 1 天，建議在重構週處理）
+  - 不緊急：[影響說明]
+
+## 💪 強項維持（建議作為修復範本）*
+- `[目錄]/`：[強項說明] → **建議作為 [弱點目錄]/ 的修復範本**
+
+## ⚠️ 高風險未修警告
+若以下 findings 暫不修復，建議採取補償措施：
+
+- #[N] [問題]（`[file:line]`）[暴露場景]
+  → 補償建議：[具體措施]
+
+---
+*本文件由 OmniHeal 自動產生。修復完成後請勾選對應項目追蹤進度。*
+```
+
+**每個 action item 必填欄位：**
+- finding 編號（#N）+ 路徑（file:line 或目錄）
+- 預估工時（Low/Medium/High）+ 依據說明
+- Threat 項目必填「不修後果」
+- WO/SO 項目必填「參考範本」（若有 Strengths 模組）
+
 ### 步驟 6 `[D]`：產出 summary.md
 
 儲存到 `progress/YYYY-MM-DD-<skill>/summary.md`：
@@ -305,6 +404,9 @@ task_001 在 src/auth/login.py:23 發現 SQL 注入（severity:high）；建議�
 #[N] [file:line] — [問題描述]（confidence:[分數]）
 #[N] [file:line] — [問題描述]（confidence:[分數]）
 
+## 💪 識別強項
+- `[目錄]/`（clean density [X]%）：[說明，可作為修復範本]
+
 ## 已跳過檔案清單
 | 檔案 | 跳過原因 |
 |------|---------|
@@ -315,7 +417,7 @@ task_001 在 src/auth/login.py:23 發現 SQL 注入（severity:high）；建議�
 
 在 `scan_plan.md` 末尾追加（surgical append，不覆蓋）：
 ```
-OMNIHEAL_SCAN_COMPLETE | [YYYY-MM-DD HH:MM] | [M] 個檔案 | 高嚴重度 [N] 個
+OMNIHEAL_SCAN_COMPLETE | [YYYY-MM-DD HH:MM] | [M] 個檔案 | 高嚴重度 [N] 個 | action_plan.md 已產出
 ```
 
 此信號讓使用者和外部監控無歧義判斷掃描是否完成（區別於「中途停止待恢復」）。

@@ -220,14 +220,15 @@ type: summary
 Phase 1 全部 task 已完成（此 task 在 queue 末尾）
 
 ## 目標
-執行 Phase 1.5：整合發現，產出 progress/YYYY-MM-DD-skill/summary.md
+執行 Phase 1.5：整合發現，產出 summary.md + action_plan.md
 
 ## 參考
-phases/phase1_scanner.md 的「Phase 1.5」章節
+phases/phase1_scanner.md 的「Phase 1.5」章節（步驟 0 → 1-5 → 5.5 → 5.6 → 6 → 7）
 
 ## 完成條件
-- summary.md 已建立（含 Trust Declaration）
-- scan_plan.md 末尾追加 OMNIHEAL_SCAN_COMPLETE
+- summary.md 已建立（含 Trust Declaration + 強項區塊）
+- action_plan.md 已建立（含今日修復、本週 PR、強項維持、高風險未修警告）
+- scan_plan.md 末尾追加 OMNIHEAL_SCAN_COMPLETE（含 action_plan.md 產出標記）
 - 本文件 status 改為 done
 ```
 
