@@ -526,3 +526,4 @@ __pycache__/
 - context 剩餘估算的具體門檻（50% / 20%）是否需要文件化為可調整參數
 - 跨掃描 findings.md 的寫入頻率：每次掃描後強制寫入，或只在有值得記錄的發現時才寫
 - 是否需要 `progress/findings.md` 的大小上限（避免多次掃描後無限增長）
+- 跨掃描未解決發現升級（Recurring Finding Escalation）：若同一發現在 findings.md 中跨越 N 次掃描仍 unresolved，Phase 1.5 可在 summary.md 標記為「長期未解決」（來源：Evolver 的停滯偵測概念）

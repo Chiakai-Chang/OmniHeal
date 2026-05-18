@@ -586,3 +586,61 @@ OmniHeal 的 `progress/findings.md` 已實作此模式：每次掃描結束萃�
 | Continuity Ledger（CONTINUITY_*.md） | OmniHeal 已有等效機制（scan_plan.md + next: + cross-scan findings.md） |
 | YAML Handoff 格式優化 | 現有 scan_plan.md Markdown 格式已足夠，避免過早優化 |
 | Premortem（TIGERS & ELEPHANTS 風險分析） | OmniHeal 的 Phase 0 constitution.md 已有等效治理底線機制 |
+
+---
+
+## 2026-05-18 — EvoMap/evolver
+
+**來源**：https://github.com/EvoMap/evolver  
+**研究目的**：評估其 GEP（Gene Expression Protocol）自進化引擎的設計，對 OmniHeal 長程掃描策略與 skill 格式的啟發
+
+### 核心發現
+
+Evolver 是一套 AI Agent 自進化引擎，讓 Agent 透過讀取自身 runtime 日誌（memory/）偵測錯誤模式（signals），選擇對應的 Gene（策略模板），產生 GEP prompt，並記錄 EvolutionEvent 稽核軌跡。核心論文（arXiv:2604.15097）在 4590 組對照試驗中證明：Gene 表示法比 Skill 文件更穩健，是更好的迭代學習載體。
+
+**Evolver 與 OmniHeal 的根本差異：**
+
+| 面向 | Evolver | OmniHeal |
+|------|---------|---------|
+| 目的 | Agent 自我進化（改善自身能力） | 目標專案健檢（找出專案問題） |
+| 掃描對象 | Agent 自身的 memory/ 日誌 | 目標專案的程式碼/日誌/文字稿 |
+| 輸出 | GEP prompt（指導下一次進化） | findings report（問題清單） |
+| 迴圈 | 長期持續自進化 | 單次或定期健檢 |
+
+**技術障礙：**
+- 需要 `npm install -g @evomap/evolver`（Node.js >= 18）→ 違反零安裝原則
+- 需要 Proxy daemon（localhost:19820）→ 違反零安裝原則
+- 核心 `src/gep/` 原始碼已混淆（`_0x125841` 格式）→ 無法研究實作細節
+- 正轉向 source-available 授權 → 上游可靠性疑慮
+
+### 有價值的概念性發現
+
+雖然整體設計不適合導入，但以下兩個概念值得記錄：
+
+**1. Gene 結構驗證了 OmniHeal 的 skill 格式**  
+Evolver Gene 的結構：`signals_match`（觸發條件）+ `strategy`（策略步驟）+ `constraints.max_files`（範疇限制）+ `validation`（驗證步驟）。
+
+這與 OmniHeal skill_*.md 的 `scope.in`（觸發條件）+ 分析標準（策略步驟）+ `scope.out`（範疇限制）+ Claim Verification（✓ VERIFIED 驗證步驟）高度對應。Evolver 的設計獨立驗證了 OmniHeal 的 skill 格式選擇是正確的方向。
+
+**2. 停滯偵測（Stagnation Detection）概念 → 跨掃描未解決發現的升級**  
+Evolver 的 Signal De-duplication 功能防止「修復迴圈」：偵測到同一問題重複出現卻沒有被真正解決時，停止繼續報告，改以「停滯」訊號標記。
+
+對 OmniHeal 的啟發：若同一個發現跨越多次掃描都出現在 `progress/findings.md`（跨掃描發現紀錄）且狀態始終為 `unresolved`，Phase 1.5 可在 summary.md 中將其升級為「長期未解決」警告，與「新發現」區分。→ 列入 Open Items（待未來 Milestone 評估）
+
+### 採用項目
+
+無直接採用。以下兩點已在 OmniHeal 設計中有對等機制：
+- Gene 結構 → OmniHeal skill 格式已有等效設計（如上所述）
+- EvolutionEvent 稽核軌跡 → OmniHeal session_log.md 已有等效設計
+
+### 放棄項目
+
+| 項目 | 放棄原因 |
+|------|---------|
+| Node.js CLI（evolver 命令） | 需要 npm install，違反零安裝原則 |
+| Proxy daemon（localhost:19820）| 需要持續運行的程序，違反零安裝原則 |
+| GEP 自進化迴圈（Gene/Capsule/EvolutionEvent） | 目的是 Agent 自我進化，OmniHeal 是專案健檢，定位根本不同 |
+| ATP（Agent Transaction Protocol）市集 | 需要 EvoMap 平台帳號、credits、網路連線，完全不適用 |
+| EVOLVE_STRATEGY presets（balanced/harden/repair-only）| OmniHeal 已有等效的 fast/standard/deep 深度等級 + skill 選擇 |
+| EvoMap Hub 連線 | 外部平台依賴，OmniHeal 設計為完全離線可用 |
+| 源碼研究 | 核心 src/gep/ 已混淆，無法研究實作細節 |
