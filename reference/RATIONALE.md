@@ -783,3 +783,104 @@ Phase 0 在詢問使用者治理問題前，先對目標目錄的問題空間做
 | L1/L2/L3 問題分級 | OmniHeal 已有等效的 fast/standard/deep 深度等級 |
 | ADR Lifecycle / Assetization | OmniHeal 的 progress/ + cross-scan findings.md 已有等效的稽核軌跡機制 |
 | Adversarial Pivot（推理邏輯切換）| 設計為多輪討論間的模式切換；OmniHeal 是批次線性掃描，無適用場景 |
+
+---
+
+## 2026-05-18 — msitarzewski/agency-agents
+
+**來源**：https://github.com/msitarzewski/agency-agents  
+**研究目的**：評估其大型 Agent 人格庫（Codebase Onboarding Engineer、Code Reviewer 等）的輸出格式設計，對 OmniHeal findings 格式與掃描誠實度的啟發
+
+### 核心發現
+
+Agency-agents 是一個 Agent 人格定義庫，包含 Codebase Onboarding Engineer（事實優先、三層說明格式、嚴格作用域控制）與 Code Reviewer（🔴 blocker / 🟡 suggestion / 💭 nit 嚴重度標記、導師語氣）等角色定義。
+
+**三個關鍵設計觀察：**
+
+1. **三層說明格式（1-line → 5-min → deep dive）**：每個 onboarding 解釋分三個深度，對應「我只需要知道這是什麼」→「我要理解如何使用」→「我要理解為什麼這樣設計」。
+   - OmniHeal 已有等效三層結構：findings_index.md 一行摘要 → findings/[filename].md 詳細說明 → 原始 file:line 指向實際程式碼。無需新增層次。
+
+2. **"Files inspected vs not inspected" 誠實度原則**：Agent 必須明確聲明哪些檔案「已讀（inspected）」、哪些「未讀（not inspected）」，不允許在範圍之外做聲明。
+   - OmniHeal 已透過 Understand-Anything 的 Error Transparency 原則採用等效機制：Phase 1.5 summary.md 必須包含「跳過檔案統計（N/M 個，原因分佈）」。概念相同，無需新增。
+
+3. **嚴重度標記（🔴/🟡/💭）**：視覺化的 blocker / suggestion / nit 三級。OmniHeal 已有 severity:high / medium / low，對應相同語義。
+
+### 決策
+
+**ST 策略（Strengths-Threats）：以現有優勢應對潛在誤解風險**
+
+Agency-agents 正式驗證了 OmniHeal 三個已有設計的正確性：
+1. findings_index + findings/[file].md 雙層結構 = 三層說明格式的自然實作
+2. session_log 跳過統計 + Phase 1.5 summary.md = "inspected vs not inspected" 誠實度原則的等效實作
+3. severity:high/medium/low = blocker/suggestion/nit 的等效語義
+
+**無需修改 spec。**
+
+### 放棄項目
+
+| 項目 | 放棄原因 |
+|------|---------|
+| 人格化 Agent 角色（互動語氣、個性設定）| OmniHeal 是工具，不是人格化的 AI 助理，語氣設定不適用 |
+| 導師語氣（reviewer-as-mentor）| OmniHeal findings 已設計為建設性語氣；不需要額外的語氣人格框架 |
+| 知識邊界聲明格式（"I don't know X"）| OmniHeal 用 `✗ UNCERTAIN` 標記處理相同問題；更結構化 |
+| 互動式說明流程（等使用者回應再繼續）| OmniHeal 是無人值守夜間掃描，不支援互動等待 |
+
+---
+
+## 2026-05-18 — multica-ai/andrej-karpathy-skills
+
+**來源**：https://github.com/multica-ai/andrej-karpathy-skills  
+**研究目的**：評估 Karpathy 4 原則（Think Before Coding / Simplicity First / Surgical Changes / Goal-Driven Execution）對 OmniHeal 核心設計哲學的驗證與啟發
+
+### 核心發現
+
+本 repo 是單一 CLAUDE.md，載有 Andrej Karpathy 的 4 條 AI 編程原則。
+
+**4 條原則與 OmniHeal 對照：**
+
+| Karpathy 原則 | OmniHeal 已有的等效設計 |
+|------|---------|
+| **Think Before Coding**（先想清楚再動手）| Phase 0 的 constitution.md + MECE 治理問題；spec 要求在任何掃描前先確認治理底線 |
+| **Simplicity First**（最簡單的方案優先）| OmniHeal 的零安裝、單 Agent、3 個核心 skills（而非 109 個）；主動拒絕多 Agent 基礎設施 |
+| **Surgical Changes**（手術刀式精準修改）| OmniHeal「只讀，不修改目標專案」原則；Claim Verification 的 ✓ VERIFIED 要求精確至 file:line |
+| **Goal-Driven Execution**（以目標驅動執行）| 3-Strike Protocol + OMNIHEAL_SCAN_COMPLETE 信號；掃描永遠朝向「完整報告」目標執行 |
+
+### 決策
+
+**ST 策略（Strengths-Threats）：Karpathy 4 原則是 OmniHeal 設計哲學的外部驗證**
+
+4 條原則全部在 spec 中有等效實作。Karpathy 的框架提供了有公信力的第三方視角，確認 OmniHeal 的設計方向正確。
+
+**無需修改 spec。**
+
+### 放棄項目
+
+無額外採用或放棄項目。本研究的結論是純粹的概念驗證——OmniHeal 的設計已正確實踐了這些原則，無需引入新機制。
+
+---
+
+## 2026-05-18 — 666ghj/MiroFish
+
+**來源**：https://github.com/666ghj/MiroFish  
+**研究目的**：評估其群體智慧預測引擎（Swarm Intelligence）設計對 OmniHeal 的參考性
+
+### 核心發現
+
+MiroFish 是一套「數位世界模擬器」，讓數千個 Agent 模擬真實世界行為以預測事件結果（例如：選舉結果、市場走勢）。技術棧：Docker + Node.js + 前端 + 後端 + 資料庫；架構核心是大規模並行 Agent spawn（數千個）。
+
+**定位差異對照：**
+
+| 面向 | MiroFish | OmniHeal |
+|------|---------|---------|
+| 核心目的 | 模擬真實世界預測事件走勢 | 掃描程式碼/日誌/文字稿健檢 |
+| Agent 數量 | 數千個並行 Agent | 單一 Agent 順序執行 |
+| 安裝需求 | Docker + Node.js + DB | 零安裝（git clone 即用）|
+| 使用場景 | 預測分析平台 | 靜態分析健檢工具 |
+
+### 決策
+
+**WT 策略（Weaknesses-Threats）：完全不同定位，全數放棄**
+
+MiroFish 的設計假設（多 Agent、Docker 環境、持續運行服務）與 OmniHeal 的核心約束（零安裝、單 Agent、一次性掃描）根本衝突。無可用設計模式可萃取。
+
+**無需修改 spec。**
