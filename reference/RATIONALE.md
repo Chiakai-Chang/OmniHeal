@@ -430,3 +430,89 @@ OMNIHEAL_SCAN_COMPLETE | 2026-05-18 06:23 | 共 157 個檔案 | 高嚴重度發�
 | MCP 設定 | 同前 |
 | 47 個專業代理 + 181 個 skill 的完整目錄 | OmniHeal 追求最小化，3 個核心 skill 足夠 |
 | ECC 的 12-layer Agent Stack 診斷框架 | 是除錯工具，不是掃描工具，不適用 |
+
+---
+
+## 2026-05-18 — wanshuiyin/Auto-claude-code-research-in-sleep（ARIS）
+
+**來源**：https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep  
+**研究目的**：評估其「睡眠中自動 AI 研究」系統的持續自動化設計，對 OmniHeal 夜間全自動掃描的長程穩健性啟發
+
+### 核心發現
+
+ARIS 是一套 ML 研究自動化 harness，讓 Agent 在無人值守的情況下執行完整研究流程（發現想法 → 實驗 → 自動評審 → 撰寫論文）。最核心的洞見：
+
+> **「Pipeline Status 是協議，Hook 是實作。協議不需要 Hook 也能運作。」**
+> 只要在 CLAUDE.md 維護一個結構化的 `## Pipeline Status` 區塊，任何 Agent 在任何平台（Claude Code、Cursor、Trae、OpenClaw）都能在 30 秒內恢復工作狀態。
+
+三個對 OmniHeal 最有用的設計：
+1. **`next:` 欄位** — Pipeline Status 的最重要欄位：「我接下來應該做什麼？」，防止 Agent 恢復後茫然停頓
+2. **`last_updated:` 時間戳** — 每次 Agent 寫入進度檔時自動更新，讓使用者判斷掃描是否卡住
+3. **Findings.md 作為跨 session 發現紀錄** — 與執行紀錄（session_log）分開，記錄「關於這個專案我學到了什麼」，跨多次掃描持久保存
+
+### 採用項目
+
+**1. scan_plan.md 加入 `next:` 欄位與 `last_updated:` 時間戳**  
+來源：ARIS 的 `## Pipeline Status` 區塊設計
+
+OmniHeal 的 `scan_plan.md` 格式升級，加入兩個欄位：
+```markdown
+## 當前掃描任務
+- 目標目錄：./src
+- 使用技能：skill_code_lint
+- 開始時間：2026-05-18 22:00
+- last_updated：2026-05-18 23:42   ← 每次 Agent 更新此檔時自動填寫
+- 輸出目錄：progress/2026-05-18-code_lint/
+
+## Phase 狀態
+- Phase 0（環境探測）：complete
+- Phase 1（全域掃描）：in_progress（批次 3/8，已處理 42/157 個檔案）
+
+## next
+繼續批次 4（第 43–60 個檔案，從 src/payment/ 開始），深度：standard
+```
+
+**`next:` 欄位讓 Agent 恢復後不需要重新推算「現在要做什麼」**，直接照做即可。  
+`last_updated:` 讓使用者早晨查看報告時，能判斷掃描是「正常完成」還是「中途卡住超過 N 小時」。
+
+**2. 跨掃描 Findings.md（Cross-Scan Discovery Log）**  
+來源：ARIS 的 `findings.md` 設計（分 Research Findings / Engineering Findings 兩層）
+
+OmniHeal 的 `progress/` 增加一個頂層 `findings.md`（不在 YYYY-MM-DD-skill/ 子目錄下）：
+- **用途**：記錄「關於這個專案我在掃描中學到的事情」，跨多次掃描保持持久
+- **不是** session_log（執行紀錄）；**不是** findings_index（單次掃描的問題清單）
+- 只記錄**跨次都有意義**的發現（例如：「此專案的 Python 檔案幾乎都不遵守 snake_case」、「src/legacy/ 目錄的程式碼品質系統性偏低，每次掃描都觸發大量 high findings」）
+
+格式：
+```markdown
+# OmniHeal 跨掃描發現紀錄
+
+## [2026-05-18] 掃描：src/（skill_code_lint）
+- src/legacy/ 目錄佔總 high findings 的 60%；建議下次只對 legacy/ 執行 deep 深度
+- 此專案使用混合命名慣例（部分模組 camelCase，部分 snake_case）；constitution.md 已更新治理規則
+
+## [2026-05-18] 掃描：logs/（skill_log_parse）
+- 日誌格式共 3 種（JSON / 純文字 / 混合）；skill_log_parse 對純文字格式的信心度普遍偏低（60–75）
+```
+
+**3. 恢復時的 Context Narrowing（最小必要 context）**  
+來源：ARIS 的「research_contract.md = 只讀當前任務的聚焦文件，而非全部原始紀錄」設計
+
+OmniHeal 的 LAUNCH.md 第零步（Session Recovery）明確規定讀取順序與範圍：
+1. 讀 `progress/scan_plan.md` → 看 `next:` 欄位（30 秒定向）
+2. 讀 `progress/YYYY-MM-DD-<skill>/findings_index.md` **最後 20 行**（只看當前 session 最近的進度，不是全部）
+3. 讀 `progress/YYYY-MM-DD-<skill>/session_log.md` **最後 10 行**（確認上次做到哪裡）
+4. **嚴禁**：恢復時重新載入所有 findings/[filename].md 詳細頁（context pollution）
+
+「聚焦恢復」原則：Agent 恢復工作狀態只需要「next 欄位 + 最近幾行進度」，不需要重新讀取整個掃描歷史。
+
+### 放棄項目
+
+| 項目 | 放棄原因 |
+|------|---------|
+| Watchdog daemon（watchdog.py）| 需要 Python daemon 持續在 GPU 伺服器執行，OmniHeal 不依賴任何持續運行的程序 |
+| Hook 自動化（session-restore.sh / context-refresh.sh）| Claude Code 專屬；OmniHeal 在任何 Agent 執行，Protocol（CLAUDE.md 中的 Pipeline Status）比 Hook 實作更重要，直接採用協議設計即可 |
+| 跨模型對抗評審（Executor / Reviewer 不同家族）| OmniHeal 單 Agent 執行，不假設有第二個模型可用 |
+| 完整 ARIS 研究 pipeline（W1 → W4）| OmniHeal 是程式碼/日誌/文字稿健檢工具，不是 ML 研究自動化框架，定位不同 |
+| CronCreate 定時排程 | 超出 OmniHeal 的零安裝設計原則；使用者可自行用 OS 排程器配合 |
+| Effort levels（lite/balanced/max/beast）| OmniHeal 已有等效的 fast/standard/deep 深度等級，不需要重複抽象層 |

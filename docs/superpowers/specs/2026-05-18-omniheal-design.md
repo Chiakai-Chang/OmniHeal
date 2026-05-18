@@ -1,5 +1,5 @@
 # OmniHeal — 設計文件 (Design Spec)
-> 版本：v1.6 | 日期：2026-05-18 | 更新：分析深度等級、Context Budget 安全閘、De-Sloppify Phase 1.5、迴圈終止信號（everything-claude-code）
+> 版本：v1.7 | 日期：2026-05-18 | 更新：scan_plan.md 加 next/last_updated 欄位、跨掃描 findings.md、Context Narrowing 恢復原則（ARIS）
 
 ---
 
@@ -76,9 +76,10 @@ OmniHeal/                        ← 整個工具箱的根目錄（git clone 進
 │   └── constitution_base.md     ← 「治理規則文件」的基礎模板（Phase 0 會填寫它）
 │
 ├── progress/                    ← 所有掃描狀態與結果（應 commit）
-│   ├── scan_plan.md             ← 當前任務狀態（目標目錄、Skill、每個 Phase 完成狀態）
+│   ├── scan_plan.md             ← 當前任務狀態（含 next: 與 last_updated: 欄位）
 │   ├── file_index.md            ← Phase 0 產出：目標專案所有檔案的一行摘要清單
 │   ├── constitution.md          ← Phase 0 產出：「治理規則文件」正本
+│   ├── findings.md              ← 跨掃描發現紀錄（學習累積，不隨單次掃描重置）
 │   └── YYYY-MM-DD-<skill>/      ← 每次掃描的獨立子目錄（日期+技能命名）
 │       ├── findings_index.md    ← 每個分析過的檔案一行摘要（路徑+主要發現+嚴重程度）
 │       ├── session_log.md       ← 機器可解析的執行紀錄（ISO 時間+操作類型）
@@ -123,17 +124,19 @@ OmniHeal/                        ← 整個工具箱的根目錄（git clone 進
 3. 閱讀 phases/phase1_scanner.md，開始逐檔掃描
 4. 每完成一個 Phase，更新 progress/scan_plan.md 的狀態
 
-## 重啟自我檢查（5 個問題，中斷後必做）
-若掃描中斷後重新啟動，先回答這 5 個問題再繼續：
-1. 我在掃描哪個目錄？（progress/scan_plan.md）
-2. 現在跑到哪個 Phase？（progress/scan_plan.md 的 Phase 狀態）
-3. 這次的任務目標是什麼？（本文件或 scan_plan.md）
-4. 我已經發現了什麼？（progress/YYYY-MM-DD-<skill>/findings.md）
-5. 我上次做到哪裡？（progress/YYYY-MM-DD-<skill>/session_log.md 最後幾行）
+## 重啟自我檢查（Context Narrowing 恢復，中斷後必做）
+若掃描中斷後重新啟動，**依序**讀以下最小必要 context（不多讀）：
+1. `progress/scan_plan.md` → 看 `next:` 欄位（定向，30 秒）
+2. `progress/YYYY-MM-DD-<skill>/findings_index.md` 最後 20 行（確認最近掃描狀態）
+3. `progress/YYYY-MM-DD-<skill>/session_log.md` 最後 10 行（確認上次做到哪裡）
+4. 直接按 `next:` 欄位的指示繼續，**無需詢問使用者**
+
+**嚴禁**：恢復時重新讀取所有 `findings/[filename].md` 詳細頁（context pollution）。
 
 ## 絕對不能做的事
 - 遇到任何錯誤中斷整個程序（記錄後繼續，見 3-Strike Protocol）
-- 跳過更新 progress/ 的各個檔案
+- 跳過更新 `scan_plan.md` 的 `next:` 與 `last_updated:` 欄位
+- 恢復後詢問使用者「我應該繼續嗎？」（讀 scan_plan.md 的 next: 即可）
 - 把任何設定值寫死（用環境變數）
 ```
 
@@ -258,12 +261,18 @@ Agent 執行步驟：
 - 目標目錄：./src
 - 使用技能：skill_code_lint
 - 開始時間：2026-05-18 22:00
+- last_updated：2026-05-18 23:42   ← Agent 每次寫入此檔時自動更新
 - 輸出目錄：progress/2026-05-18-code_lint/
 
 ## Phase 狀態
 - Phase 0（環境探測）：complete
-- Phase 1（全域掃描）：in_progress（已處理 42/157 個檔案）
+- Phase 1（全域掃描）：in_progress（批次 3/8，已處理 42/157 個檔案）
+- Phase 1.5（發現清理）：pending
+
+## next
+繼續批次 4（第 43–60 個檔案，從 src/payment/ 開始），深度：standard
 ```
+`next:` 欄位讓 Agent 恢復後無需重新推算下一步，直接照做。`last_updated:` 讓使用者判斷掃描是否卡住。
 
 ### `progress/file_index.md` 格式（Phase 0 產出）
 ```markdown
@@ -330,6 +339,22 @@ status: new      # new / reviewed / resolved
 | < 50 個 | findings_index.md 單檔，不建 findings/ 分頁 |
 | 50–300 個 | findings_index.md + findings/[filename].md 分頁 |
 | > 300 個 | findings_index.md 按類型拆分（_py.md、_md.md 等） |
+
+### `progress/findings.md` 格式（跨掃描發現紀錄）
+
+> 此檔與 session_log.md（執行紀錄）不同。用途：記錄關於**這個目標專案**的結構性學習，在多次掃描間持久保存。
+
+```markdown
+# OmniHeal 跨掃描發現紀錄
+
+## [2026-05-18] src/（skill_code_lint）
+- src/legacy/ 佔總 high findings 的 60%；下次可只對此目錄執行 deep 深度以節省 token
+- 命名慣例混用（camelCase / snake_case）；constitution.md 已更新，加入治理規則
+
+## [2026-05-18] logs/（skill_log_parse）
+- 日誌格式 3 種共存；純文字格式導致 skill 信心度普遍偏低（60–75），建議下次用寬鬆門檻 70
+```
+只追加，不重寫。每次新掃描在此檔末尾加入新段落。
 
 ---
 
@@ -421,6 +446,10 @@ Agent 分析完一個檔案後，針對每個**原子化發現**輸出一條，�
 | Context Budget 安全閘 | 每批評估剩餘 context，不足時降級或停止 | 防止 context 爆炸導致末批品質劣化，參考 ECC |
 | Phase 1.5 清理 | 可選：乾淨 context 下整合發現、產 summary | De-Sloppify 模式，參考 ECC |
 | 完成信號 | 掃描完成後寫入 OMNIHEAL_SCAN_COMPLETE 標記 | 無歧義終止判斷，參考 ECC continuous-claude |
+| scan_plan.md next: 欄位 | 每次更新進度時寫入下一步指令 | 恢復後無需推算，直接照做，參考 ARIS |
+| scan_plan.md last_updated: | Agent 每次寫入自動更新時間戳 | 讓使用者判斷掃描是否卡住，參考 ARIS |
+| 跨掃描 findings.md | progress/ 頂層，跨多次掃描的學習累積 | 與 session_log 分離，參考 ARIS |
+| Context Narrowing 恢復 | 只讀 scan_plan + findings_index 末 20 行 + session_log 末 10 行 | 防止 context pollution，參考 ARIS |
 
 ---
 
@@ -484,3 +513,5 @@ __pycache__/
 - 多代理並行（Milestone 4 後再考慮，參考 Understand-Anything 的 5 並發設計）
 - Phase 1.5 是否應該作為獨立 Phase 或整合進 Phase 1 結束步驟（目前為可選）
 - context 剩餘估算的具體門檻（50% / 20%）是否需要文件化為可調整參數
+- 跨掃描 findings.md 的寫入頻率：每次掃描後強制寫入，或只在有值得記錄的發現時才寫
+- 是否需要 `progress/findings.md` 的大小上限（避免多次掃描後無限增長）
