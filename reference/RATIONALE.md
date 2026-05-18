@@ -644,3 +644,89 @@ Evolver 的 Signal De-duplication 功能防止「修復迴圈」：偵測到同�
 | EVOLVE_STRATEGY presets（balanced/harden/repair-only）| OmniHeal 已有等效的 fast/standard/deep 深度等級 + skill 選擇 |
 | EvoMap Hub 連線 | 外部平台依賴，OmniHeal 設計為完全離線可用 |
 | 源碼研究 | 核心 src/gep/ 已混淆，無法研究實作細節 |
+
+---
+
+## 2026-05-18 — tanweai/pua + sstklen/yes.md（並行研究）
+
+**來源 A**：https://github.com/tanweai/pua  
+**來源 B**：https://github.com/sstklen/yes.md  
+**研究目的**：評估兩套 AI Agent 行為治理 skill 的設計，對 OmniHeal Phase 1 掃描品質、3-Strike Protocol、與 Phase 1.5 摘要可靠性的啟發
+
+### 核心發現
+
+**PUA**：用企業 KPI 考績語言（阿里/字節/Huawei/Musk 等 14 種「味道」）迫使 Agent 在放棄前窮盡所有方法。核心洞見：
+> **「冰山法則」——一個問題進來，一類問題出去。** 修了一個 bug 就收工？同模組有沒有同類問題？上下游有沒有被波及？ P8 的格局是看到一棵樹，想到整片林子。
+
+**YES.md**：PUA 的對立設計，強調安全、有證據、有結構的 Agent 行為。核心洞見：
+> **「Conclusion Integrity Gate」——根因宣告前必須回答 4 個問題：** 資料來源？時間範圍？樣本 vs 全量？其他可能性？
+> **「Level-3 Direction Check」——3-Strike Protocol 的缺失環節：** 持續在錯誤方向上努力，比停下來更糟糕。第 2 次失敗時，必須先問「我的方向根本就錯了嗎？」才能繼續第 3 次。
+
+兩個 repo 的交叉點：YES.md 的 **Ripple Check** 和 PUA 的**冰山法則**都指向同一個設計：發現一個問題類型時，立即檢查同類型檔案是否有相同模式。
+
+### 採用項目
+
+**1. 冰山法則 → Pattern Sweep 模式警示（Phase 1 發現輸出格式增加新欄位）**  
+來源：PUA「冰山下面還有冰山」+ YES.md Ripple Check「same pattern? grep for it」
+
+OmniHeal 發現條目新增可選的 Pattern Alert 行：
+```
+#3 src/auth/login.py:23 — SQL 字串拼接（severity:high, confidence:92）[✓ VERIFIED]
+   問題：第 23 行直接將使用者輸入拼入 SQL 字串，有注入風險
+   建議：改用參數化查詢（parameterized query）
+   ⚠️ Pattern Alert：SQL 字串拼接通常是系統性問題。建議對 src/auth/ 下的其他 .py 檔案快速掃描是否有相同模式。
+```
+
+規則：
+- **只在** severity:high 的 `✓ VERIFIED` 發現且信心度 ≥ 85 時才加 Pattern Alert
+- Pattern Alert 內容：具體建議要掃描的目錄/檔案類型，不得模糊（不可寫「請查看相關檔案」）
+- Pattern Alert **不計入發現編號**（#N），是輔助提示，不是獨立發現
+
+→ 修改 spec Section 8 的「區塊 3：輸出格式」
+
+**2. Conclusion Integrity Gate（Phase 1.5 新增第 0 步）**  
+來源：YES.md 的 Conclusion Integrity Gate（4 mandatory questions before root-cause claim）
+
+Phase 1.5 的 summary.md 在寫任何統計或根因結論前，必須先回答 4 個問題：
+
+| 問題 | 要求 |
+|------|------|
+| **資料來源** | 證據從哪來？（findings_index / 原始 findings 詳細頁）|
+| **時間範圍** | 本次掃描，還是部分批次？ |
+| **樣本 vs 全量** | 已掃描 N 個檔案，總共 M 個 |
+| **其他可能性** | 高嚴重度發現是否有其他解釋？（版本問題/測試環境假陽性）|
+
+若任何問題答案不完整：summary.md 開頭必須標注 `⚠️ 基於部分資料（掃描進度：N/M 個檔案）`；禁用詞：「確定」、「一定是」、「根本原因是」。
+
+→ 加入 spec Section 6 Phase 1.5 步驟清單的第 0 步
+
+**3. 3-Strike Protocol 加入 Level-2 方向自檢（Direction Check）**  
+來源：YES.md 的 Level-3 Debugging Escalation「check direction before continuing」
+
+現有 3-Strike Protocol：
+- 第 1 次失敗：記錄，換方式重試
+- 第 2 次失敗：再換方式
+- 第 3 次失敗：永久跳過
+
+新增 Level-2 方向自檢，在第 2 次失敗後、第 3 次重試前：
+> Agent 必須明確回答：「我現在的方式是根本方向錯誤，還是只是參數調整？」
+> - 若是根本方向錯誤（例如：試圖用讀 UTF-8 的方式處理 Latin-1 檔案）→ 換完全不同的策略再試
+> - 若是參數調整（例如：編碼嘗試不同 codec）→ 一次嘗試完，算一次，然後才算第 3 次失敗
+
+原則：在錯誤方向上堅持，比停下來更糟糕。第 3 次失敗前必須確認方向正確，才值得花這個 token。
+
+→ 修改 spec Section 6 Phase 1 的「3-Strike Protocol」
+
+### 放棄項目
+
+| 項目 | 放棄原因 |
+|------|---------|
+| PUA 企業味道系統（14 種：阿里/字節/Huawei/Musk 等）| 考績語言風格與 OmniHeal 領域無關工具定位不符 |
+| PUA 壓力升級 L0-L4 旁白機制 | 設計為互動式人在旁邊的場景；OmniHeal 是無人值守夜間掃描 |
+| PUA Sub-agent 注入協議 | OmniHeal 單 Agent 設計，不 spawn 子 agent |
+| PUA Hook 基礎設施（SessionStart/PreCompact）| Claude Code 專屬，違反零安裝原則 |
+| YES.md Hook 腳本（pre-bash-guard.sh / post-edit-check.sh）| 同上，需要 shell 腳本 + 平台支援 |
+| YES.md Safety Gates（Backup First / Deploy Safety）| OmniHeal 只讀目標檔案、不修改目標專案，此 gate 不適用 |
+| YES.md Bug Closure Protocol（Verify/Document/Learn 3 步）| OmniHeal 發現問題，不修復問題；修復是目標專案的責任 |
+| YES.md Blast Radius Check（改動前問 3 問題）| 同上，OmniHeal 不修改目標檔案 |
+| YES.md Memory Layer（跨 session 錯誤日誌）| OmniHeal 已有等效機制（cross-scan findings.md）|

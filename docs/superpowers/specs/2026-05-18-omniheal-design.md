@@ -1,5 +1,5 @@
 # OmniHeal — 設計文件 (Design Spec)
-> 版本：v1.8 | 日期：2026-05-18 | 更新：Claim Verification 兩步驗證（✓ VERIFIED / ? INFERRED / ✗ UNCERTAIN）、"Compound not Compact" 驗證（CC-v3）
+> 版本：v1.9 | 日期：2026-05-18 | 更新：Pattern Sweep 模式警示（冰山法則）、Conclusion Integrity Gate（YES.md）、3-Strike Level-2 方向自檢（pua + yes.md）
 
 ---
 
@@ -204,6 +204,15 @@ Agent 執行步驟（標注 D/S/I 動詞型別）：
 **目標**：用乾淨的 context（不重新讀原始檔案）整合、清理 Phase 1 的原始發現，產出 executive summary。
 
 Agent 執行步驟：
+0. `[S]` **Conclusion Integrity 自檢（在寫任何統計或根因結論前）：**
+   在 summary.md 開始撰寫前，回答以下 4 個問題：
+   - **資料來源**：證據從哪來？（findings_index / findings 詳細頁）
+   - **時間範圍**：本次掃描，或部分批次？
+   - **樣本 vs 全量**：已掃描 N / 總共 M 個檔案
+   - **其他可能性**：高嚴重度發現是否可能有假陽性（測試環境、版本差異）？
+   若任何問題答案不完整，summary.md 開頭必須標注 `⚠️ 基於部分資料（掃描進度：N/M）`。
+   禁用詞：「確定」「一定是」「根本原因是」；改用「初步證據指向…，待確認 Y」。
+
 1. `[D]` 讀取 `findings_index.md`（全部條目，一行一條）
 2. `[D]` 讀取所有 `findings/[filename].md`（詳細頁）
 3. `[S]` 合併重複發現（同一問題被不同段落各報告一次）
@@ -241,7 +250,13 @@ Agent 執行步驟：
 #### 3-Strike Protocol（單一檔案失敗處理）
 ```
 第 1 次失敗 → 記錄錯誤原因，換一種方式重試
-第 2 次失敗 → 再換一種方式
+
+第 2 次失敗 → 先執行「Level-2 方向自檢」（Direction Check），再決定第 3 次策略：
+  ★ 自問：「我現在的方式是根本方向錯誤，還是只是參數調整？」
+  - 若根本方向錯誤（如：用 UTF-8 讀 Latin-1 檔案）→ 換完全不同的策略
+  - 若只是參數調整（如：試不同 codec）→ 仍算第 2 次，完整換策略後才進入第 3 次
+  在錯誤方向上堅持比停下來更糟糕；第 3 次機會要用在正確方向上。
+
 第 3 次失敗 → 在 session_log.md 標記「永久跳過：[具體原因]」，繼續下一個檔案
 ```
 跳過原因必須具體（如：「編碼不支援 UTF-8」、「非純文字檔」、「超過大小上限 1MB」），不允許模糊描述。  
@@ -413,12 +428,14 @@ Agent 分析完一個檔案後，針對每個**原子化發現**輸出一條，�
 #N file/path.py:行號 — 問題描述（一個問題）（severity:level, confidence:分數）[✓ VERIFIED]
    問題：[具體描述，包含行號或位置，不可模糊]
    建議：[一個具體的修正方向]
+   ⚠️ Pattern Alert：[可選] 此問題類型通常為系統性問題，建議掃描 [具體目錄/檔案類型]
 ```
 - `#N`：本次掃描全局遞增編號
 - `file/path.py:行號`：精確位置（必填，無行號則標明所在函式/類別）
 - `[✓ VERIFIED]`：必填標記，代表 Agent 已讀原始檔案確認（非 grep 推斷）
 - `confidence` < 80：**不輸出此條**，直接略過
 - `? INFERRED`（未讀原始碼確認）：**不輸出為 finding**；可記入 session_log 的 `inferred:` 條目
+- `⚠️ Pattern Alert`：**僅限 severity:high + confidence ≥ 85 的發現**；必須具體指明建議掃描的目錄或類型（不得寫「請查看相關檔案」）；不佔用發現編號
 
 若整個檔案無任何 confidence ≥ 80 的發現，在 `findings_index.md` 標記為 `✅ clean`，**不建立詳細頁**。
 
