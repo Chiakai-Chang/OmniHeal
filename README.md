@@ -1,3 +1,5 @@
+繁體中文 | [English](README.en.md)
+
 # OmniHeal
 
 **零安裝 AI 專案健檢工具箱。**
