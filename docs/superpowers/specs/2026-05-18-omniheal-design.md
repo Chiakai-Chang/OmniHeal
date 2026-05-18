@@ -1,5 +1,5 @@
 # OmniHeal — 設計文件 (Design Spec)
-> 版本：v1.7 | 日期：2026-05-18 | 更新：scan_plan.md 加 next/last_updated 欄位、跨掃描 findings.md、Context Narrowing 恢復原則（ARIS）
+> 版本：v1.8 | 日期：2026-05-18 | 更新：Claim Verification 兩步驗證（✓ VERIFIED / ? INFERRED / ✗ UNCERTAIN）、"Compound not Compact" 驗證（CC-v3）
 
 ---
 
@@ -190,8 +190,13 @@ Agent 執行步驟（標注 D/S/I 動詞型別）：
      - `[D]` 讀取選定 skill 的 Prompt 模板（含 scope.in/scope.out 宣告）
      - `[D]` 讀取 `progress/constitution.md` 摘要（30 行以內）
      - `[S]` 依 skill 規定的分析標準逐條檢查（每條必須原子化，見 Atomic Finding 原則）
-     - `[S]` 每個發現評估信心度（0–100）；**低於 80 的不輸出到 findings**
-     - `[D]` 若有發現（confidence ≥ 80）：建立 `findings/[filename].md`（附 frontmatter）並更新 `findings_index.md`，每個發現賦予本次掃描全局遞增編號（#1、#2…）
+     - `[S]` 對每個潛在問題，確認**驗證狀態**：
+       - `✓ VERIFIED`：已讀原始檔案，確認問題存在於指定 file:line → 繼續評估信心度
+       - `? INFERRED`：只憑 grep/模式推斷，未讀原始碼 → **不得輸出為 finding**；可記入 session_log 的 `inferred:` 條目
+       - `✗ UNCERTAIN`：尚未調查 → **不得輸出**
+     - `[S]` 每個 `✓ VERIFIED` 發現評估信心度（0–100）；**低於 80 的不輸出到 findings**
+     - 輸出條件：**`✓ VERIFIED` + `confidence ≥ 80`** 兩者同時成立，缺一不可
+     - `[D]` 若有符合條件的發現：建立 `findings/[filename].md`（附 frontmatter）並更新 `findings_index.md`，每個發現賦予本次掃描全局遞增編號（#1、#2…）
      - `[D]` 追加一行到 `session_log.md`（跳過的檔案必須記錄具體原因，禁止靜默略過）
 6. `[D]` 在 `progress/scan_plan.md` 標記 Phase 1 為 `complete`，並寫入跳過檔案統計
 
@@ -373,10 +378,12 @@ status: new      # new / reviewed / resolved
 - ❌ 不報告「這個設計可以更好」（沒有明確標準）
 - ❌ 不報告「這段邏輯感覺有問題」（感覺不是證據）
 - ❌ 低信心度（< 80）的推測，即使有可能是問題
+- ❌ 不報告 grep/模式匹配的推測（? INFERRED）；必須讀原始檔案確認後（✓ VERIFIED）才報告
 
 **誤報優先原則（False-Positive Avoidance）：**
 > 寧可漏掉一個真正的問題，也不要輸出一個沒有證據的推測。
-> 每個發現必須能回答：「我在哪行看到什麼，根據什麼標準判斷這是問題。」
+> 每個發現必須能回答：「我讀了哪行原始碼，看到什麼，根據什麼標準判斷這是問題。」
+> grep 找到模式 ≠ 問題存在；必須讀原始檔案確認（✓ VERIFIED）。
 ```
 
 ### 區塊 2：分析標準（必填，每條必須原子化）
@@ -403,13 +410,15 @@ status: new      # new / reviewed / resolved
 ### 區塊 3：輸出格式（必填）
 Agent 分析完一個檔案後，針對每個**原子化發現**輸出一條，格式：
 ```
-#N file/path.py:行號 — 問題描述（一個問題）（severity:level, confidence:分數）
+#N file/path.py:行號 — 問題描述（一個問題）（severity:level, confidence:分數）[✓ VERIFIED]
    問題：[具體描述，包含行號或位置，不可模糊]
    建議：[一個具體的修正方向]
 ```
 - `#N`：本次掃描全局遞增編號
 - `file/path.py:行號`：精確位置（必填，無行號則標明所在函式/類別）
+- `[✓ VERIFIED]`：必填標記，代表 Agent 已讀原始檔案確認（非 grep 推斷）
 - `confidence` < 80：**不輸出此條**，直接略過
+- `? INFERRED`（未讀原始碼確認）：**不輸出為 finding**；可記入 session_log 的 `inferred:` 條目
 
 若整個檔案無任何 confidence ≥ 80 的發現，在 `findings_index.md` 標記為 `✅ clean`，**不建立詳細頁**。
 
@@ -450,6 +459,8 @@ Agent 分析完一個檔案後，針對每個**原子化發現**輸出一條，�
 | scan_plan.md last_updated: | Agent 每次寫入自動更新時間戳 | 讓使用者判斷掃描是否卡住，參考 ARIS |
 | 跨掃描 findings.md | progress/ 頂層，跨多次掃描的學習累積 | 與 session_log 分離，參考 ARIS |
 | Context Narrowing 恢復 | 只讀 scan_plan + findings_index 末 20 行 + session_log 末 10 行 | 防止 context pollution，參考 ARIS |
+| 發現驗證標記 | ✓ VERIFIED / ? INFERRED / ✗ UNCERTAIN 三級標記，? INFERRED 不得輸出 | 杜絕 80% 假聲明率，參考 CC-v3 claim-verification rule |
+| 跨掃描學習萃取 | 每次掃描結束萃取結構性學習到 findings.md；新 session 只讀精煉版 | "Compound not Compact" 原則，CC-v3 驗證 ARIS 設計 |
 
 ---
 

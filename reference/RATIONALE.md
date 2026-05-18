@@ -516,3 +516,73 @@ OmniHeal 的 LAUNCH.md 第零步（Session Recovery）明確規定讀取順序�
 | 完整 ARIS 研究 pipeline（W1 → W4）| OmniHeal 是程式碼/日誌/文字稿健檢工具，不是 ML 研究自動化框架，定位不同 |
 | CronCreate 定時排程 | 超出 OmniHeal 的零安裝設計原則；使用者可自行用 OS 排程器配合 |
 | Effort levels（lite/balanced/max/beast）| OmniHeal 已有等效的 fast/standard/deep 深度等級，不需要重複抽象層 |
+
+---
+
+## 2026-05-18 — parcadei/Continuous-Claude-v3（CC-v3）
+
+**來源**：https://github.com/parcadei/Continuous-Claude-v3  
+**研究目的**：評估其多 Agent 持續執行架構、5 層程式碼分析工具鏈（TLDR）、與跨 session 記憶系統，對 OmniHeal 分析品質與長程執行穩健性的啟發
+
+### 核心發現
+
+CC-v3 是一套生產就緒的 Claude Code harness，109 個 skills、32 個 agents、30 個 hooks，搭配 TLDR 5 層程式碼分析工具（AST→CallGraph→CFG→DFG→PDG）與 PostgreSQL 向量記憶體系統。
+
+三個對 OmniHeal 最有用的洞見：
+
+**1. 80% 假聲明率（Claim Verification Rule）：**
+> 「只用 grep 結果，不讀檔案確認」導致 80% 的程式碼聲明是錯的。
+> 每個存在性聲明必須標注信心標記：✓ VERIFIED（已讀原始碼）/ ? INFERRED（推論）/ ✗ UNCERTAIN（未確認）。
+> 沒有讀檔案就報告的發現，必須標記為 ? INFERRED，不得進入 findings。
+
+**2. Compound not Compact（複合而非壓縮）：**
+> 「session 快結束時壓縮 context」比「開始新 session 時帶入精華」更差。
+> 正確做法：從每個 session 萃取可遷移的學習，然後在新 session 用精煉 context 重新開始。
+> → 直接驗證了 ARIS 的跨掃描 findings.md 設計：把學習萃取出來，下次掃描用精煉後的 findings.md 作為 context，不是把整個 session_log 帶入。
+
+**3. YAML Handoff（token 效率觀察）：**
+> session 間傳遞的狀態用 YAML 比 Markdown 段落節省 30-40% token。
+> OmniHeal 已有等效機制（scan_plan.md 的 `next:` 欄位），效益邊際，不作為採用項目。
+
+### 採用項目
+
+**1. Claim Verification 兩步驗證（強化 Atomic Finding 與信心度機制）**  
+來源：CC-v3 的 claim-verification rule（80% false claim rate incident）
+
+OmniHeal 的 findings/[file].md 每條發現必須標注驗證狀態：
+
+| 標記 | 含義 | 能否輸出為 finding |
+|-----|------|---------|
+| `✓ VERIFIED` | Agent 讀了原始檔案，確認問題存在於指定行 | ✅ 同時 confidence ≥ 80 才可輸出 |
+| `? INFERRED` | 基於 grep/模式推斷，未讀原始檔案確認 | ❌ 不得輸出，可記入 session_log |
+| `✗ UNCERTAIN` | 尚未調查 | ❌ 不得輸出 |
+
+具體規則：
+- Agent 若只用 grep 找到「似乎有問題的模式」，標記為 `? INFERRED`
+- `? INFERRED` 發現不計入 findings；可記錄在 session_log 的 `inferred:` 條目供後續驗證
+- 從 `? INFERRED` 升級為 `✓ VERIFIED`：必須讀取原始檔案，找到 file:line，確認問題存在
+- **兩條件同時成立** 才能輸出：`✓ VERIFIED` + `confidence ≥ 80`
+
+→ 導入 spec Section 8 的 Skill 格式規範與 Phase 1 的分析步驟
+
+**2. "Compound not Compact" 設計驗證**  
+來源：CC-v3 的工作流程哲學，直接驗證 ARIS 已導入的跨掃描 findings.md 設計。
+
+CC-v3 的洞見：
+- 「把整個掃描歷史帶入新 session」= Compact（壓縮舊 context）= 劣化
+- 「萃取精華到 findings.md，新 session 只讀精華」= Compound（複合學習）= 正確做法
+
+OmniHeal 的 `progress/findings.md` 已實作此模式：每次掃描結束萃取結構性學習，下次恢復只讀 findings.md 精煉版。無需對現有設計做修改，此條目正式記錄為 CC-v3 驗證。
+
+### 放棄項目
+
+| 項目 | 放棄原因 |
+|------|---------|
+| TLDR 5 層程式碼分析工具鏈（AST→DFG→PDG） | 需要 `pip install tldr-code`、daemon、PostgreSQL——違反零安裝原則 |
+| PostgreSQL + pgvector 向量記憶體系統 | 同上，需要資料庫 daemon 持續運行 |
+| 109 skills / 32 agents / 30 hooks 完整基礎設施 | OmniHeal 追求最小化設計，3 個核心 skills 足夠 |
+| Hook 驅動的 skill 啟動機制 | Claude Code 專屬，OmniHeal 必須在任何 Agent 執行 |
+| Cross-terminal coordination DB（PostgreSQL） | 需要 Docker + PostgreSQL，違反零安裝原則 |
+| Continuity Ledger（CONTINUITY_*.md） | OmniHeal 已有等效機制（scan_plan.md + next: + cross-scan findings.md） |
+| YAML Handoff 格式優化 | 現有 scan_plan.md Markdown 格式已足夠，避免過早優化 |
+| Premortem（TIGERS & ELEPHANTS 風險分析） | OmniHeal 的 Phase 0 constitution.md 已有等效治理底線機制 |
