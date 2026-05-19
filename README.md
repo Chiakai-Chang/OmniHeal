@@ -150,7 +150,7 @@ OmniHeal 的每一個設計決策都有來源。以下是關鍵採用點：
 | [Anthropic / claude-plugins-official](https://github.com/anthropics/claude-plugins-official) | 信心度門檻（≥80）、誤報優先設計 | 避免「報了 47 個問題有 30 個是假陽性」 |
 | [ECC（黑客松冠軍）](https://github.com/affaan-m/everything-claude-code) | 分析深度等級（fast/standard/deep）、Context Budget 安全閘、Phase 1.5 De-Sloppify | 大型專案全程掃描品質一致 |
 | [Continuous-Claude-v3](https://github.com/parcadei/Continuous-Claude-v3) | Claim Verification（✓ VERIFIED / ? INFERRED）| 研究發現 80% 的 AI 程式碼聲明未讀原始碼即輸出 |
-| [PageIndex + llm-wiki-plugin](https://github.com/VectifyAI/PageIndex) | 先建索引再深潛、findings 雙層結構、surgical append | 大型專案不盲目逐行掃描 |
+| [PageIndex](https://github.com/VectifyAI/PageIndex) + [llm-wiki-plugin](https://github.com/VectifyAI/PageIndex) | 先建索引再深潛、findings 雙層結構、surgical append | 大型專案不盲目逐行掃描 |
 | [Understand-Anything](https://github.com/Lum1104/Understand-Anything) | 確定性優先（probe.py 做結構提取，LLM 做語義判斷）| 不浪費 LLM token 在可用規則計算的事 |
 | [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) | Task Queue 恢復點設計、last_updated 時間戳 | 夜間無人值守長程掃描穩健性 |
 | [PUA + YES.md](https://github.com/tanweai/pua) | Pattern Alert（冰山法則）、Level-2 方向自檢 | 發現一個問題時主動檢查同類型檔案 |
