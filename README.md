@@ -5,8 +5,9 @@
 **零安裝 AI 專案健檢工具箱。**
 
 將 OmniHeal git clone 進任何專案，然後告訴任何 AI coding agent：
-> "請閱讀 @OmniHeal 開始進行"
-
+> ```
+> 請閱讀 @OmniHeal/ 開始進行
+> ```
 Agent 讀取 `LAUNCH.md` 後，自動完成整個專案的掃描與改善建議。
 
 ---
